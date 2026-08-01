@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Marsa Maroc Container Management</title>
+    <!-- Google Fonts & Bootstrap Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Shared Stylesheet -->
+    <link rel="stylesheet" href="/static/css/style.css">
+    
+    <style>
+        .dashboard-layout {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 32px;
+            margin-bottom: 32px;
+        }
+
+        .chart-card {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            min-height: 360px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-header {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chart-container {
+            position: relative;
+            flex-grow: 1;
+            width: 100%;
+            height: 250px;
+        }
+
+        .alerts-card {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            max-height: 500px;
+        }
+
+        .alert-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px;
+            border-radius: 10px;
+            background-color: rgba(239, 68, 68, 0.05);
+            border: 1px solid rgba(239, 68, 68, 0.15);
+            margin-bottom: 12px;
+            transition: transform 0.2s;
+        }
+
+        .alert-item:hover {
+            transform: translateX(4px);
+        }
+
+        .alert-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .alert-icon {
+            color: var(--danger);
+            font-size: 1.3rem;
+            display: flex;
+        }
+
+        .alert-details h5 {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .alert-details p {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .alert-badge {
+            background-color: rgba(239, 68, 68, 0.15);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 6px;
+        }
+
+        .alerts-list {
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .no-alerts {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            flex-grow: 1;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            gap: 10px;
+            padding: 40px 0;
+        }
+
+        .no-alerts i {
+            font-size: 2rem;
+            color: var(--success);
+        }
+        
+        .charts-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar Navigation -->
+    <div class="sidebar">
+        <div class="sidebar-logo">
+            <div class="logo-text">MARSA <span class="logo-accent">MAROC</span></div>
+        </div>
+        <div class="sidebar-profile">
+            <div class="profile-avatar" id="avatarName">WA</div>
+            <div class="profile-info">
+                <span class="profile-name" id="userProfileName">Agent Portuaire</span>
+                <span class="profile-role" id="userProfileRole">Agent</span>
+                <div class="status-indicator">
+                    <span class="status-dot"></span>En ligne
+                </div>
+            </div>
+        </div>
+        <ul class="sidebar-nav">
+            <li class="nav-item active"><a href="/dashboard"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
+            <li class="nav-item"><a href="/conteneurs"><i class="bi bi-box-seam"></i> Conteneurs (Quai)</a></li>
+            <li class="nav-item"><a href="/navires"><i class="bi bi-ship"></i> Escale Navires</a></li>
+            <li class="nav-item"><a href="/facturation"><i class="bi bi-receipt"></i> Facturation</a></li>
+        
+        </ul>
+        <div class="sidebar-footer">
+            <a href="/" class="logout-btn"><i class="bi bi-box-arrow-left"></i> Déconnexion</a>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="app-container">
+        <header class="app-header">
+            <div class="header-title">
+                <h1>Tableau de Bord & Analytics</h1>
+            </div>
+            <div class="header-actions">
+                <span class="badge-role" id="headerRole">Agent Portuaire</span>
+            </div>
+        </header>
+        
+        <main class="main-content">
+            <!-- Stat Cards Grid -->
+            <div class="card-grid">
+                <div class="stat-card primary">
+                    <div class="stat-header">
+                        <span>Total Conteneurs</span>
+                        <div class="stat-icon"><i class="bi bi-box-seam"></i></div>
+                    </div>
+                    <div class="stat-value" id="statTotalContainers">0</div>
+                    <div class="stat-desc"><i class="bi bi-arrow-up-right text-success"></i> Stock actuel en zone de transit</div>
+                </div>
+                
+                <div class="stat-card danger">
+                    <div class="stat-header">
+                        <span>Taux d'Overstay</span>
+                        <div class="stat-icon"><i class="bi bi-exclamation-octagon"></i></div>
+                    </div>
+                    <div class="stat-value" id="statOverstayRate">0%</div>
+                    <div class="stat-desc" id="statOverstayCount">0 conteneurs critiques (>10j)</div>
+                </div>
+                
+                <div class="stat-card warning">
+                    <div class="stat-header">
+                        <span>Pénalités Cumulées</span>
+                        <div class="stat-icon"><i class="bi bi-currency-exchange"></i></div>
+                    </div>
+                    <div class="stat-value" id="statTotalPenalties">0 MAD</div>
+                    <div class="stat-desc"><i class="bi bi-info-circle"></i> Jours 1-5 gratuits / Facturé après</div>
+                </div>
+                
+                <div class="stat-card success">
+                    <div class="stat-header">
+                        <span>Taux d'Occupation</span>
+                        <div class="stat-icon"><i class="bi bi-grid-3x3-gap"></i></div>
+                    </div>
+                    <div class="stat-value" id="statOccupancyRate">0%</div>
+                    <div class="stat-desc" id="statAvailableSlots">0 slots disponibles / 80</div>
+                </div>
+            </div>
+
+            <!-- Dashboard Charts and Alerts Section -->
+            <div class="dashboard-layout">
+                <!-- Charts Grid -->
+                <div class="charts-row">
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <span>Répartition par Armateur</span>
+                            <i class="bi bi-pie-chart text-secondary"></i>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="ownerChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <span>Occupation par Zone</span>
+                            <i class="bi bi-bar-chart text-secondary"></i>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="zoneChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Critical Alerts Panel -->
+                <div class="alerts-card">
+                    <div class="chart-header">
+                        <span>Alertes Overstay Critiques</span>
+                        <span class="badge badge-danger" id="alertCountBadge">0</span>
+                    </div>
+                    <div class="alerts-list" id="alertsList">
+                        <!-- Alert items loaded dynamically -->
+                        <div class="no-alerts">
+                            <i class="bi bi-check-circle-fill"></i>
+                            <span>Aucun conteneur en alerte overstay</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Universal AI Assistant Widget -->
+    <script src="/static/js/ai-widget.js"></script>
+
+    <script>
+        // Check session
+        const userName = localStorage.getItem('user_name');
+        const userRole = localStorage.getItem('user_role');
+        if (!userName || !userRole) {
+            window.location.href = '/';
+        } else {
+            document.getElementById('userProfileName').innerText = userName;
+            document.getElementById('userProfileRole').innerText = userRole;
+            document.getElementById('headerRole').innerText = userRole;
+            
+            // Generate simple initials avatar
+            const initials = userName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            document.getElementById('avatarName').innerText = initials;
+        }
+
+        // Global Chart variables
+        let ownerChartObj = null;
+        let zoneChartObj = null;
+
+        // Fetch dashboard statistics and render charts
+        async function loadDashboardData() {
+            try {
+                // Fetch containers and invoices
+                const containersRes = await fetch('/api/conteneurs');
+                const containers = await containersRes.json();
+
+                const invoicesRes = await fetch('/api/factures');
+                const invoices = await invoicesRes.json();
+
+                // 1. Calculate general metrics
+                const total = containers.length;
+                const overstayCount = containers.filter(c => c.days > 10).length;
+                const overstayRate = total > 0 ? Math.round((overstayCount / total) * 100) : 0;
+                
+                const totalPenalties = invoices.reduce((acc, inv) => acc + inv.fees, 0);
+                const capacity = 80;
+                const occupancyRate = Math.round((total / capacity) * 100);
+                const freeSlots = capacity - total;
+
+                // Update Stat Cards UI
+                document.getElementById('statTotalContainers').innerText = total;
+                document.getElementById('statOverstayRate').innerText = `${overstayRate}%`;
+                document.getElementById('statOverstayCount').innerText = `${overstayCount} conteneurs critiques (>10j)`;
+                document.getElementById('statTotalPenalties').innerText = `${totalPenalties.toLocaleString('fr-FR')} MAD`;
+                document.getElementById('statOccupancyRate').innerText = `${occupancyRate}%`;
+                document.getElementById('statAvailableSlots').innerText = `${freeSlots} slots disponibles / ${capacity}`;
+
+                // Update Alerts list
+                renderAlerts(containers, invoices);
+
+                // 2. Render Charts
+                renderCharts(containers);
+
+            } catch (err) {
+                console.error("Error loading dashboard data:", err);
+            }
+        }
+
+        function renderAlerts(containers, invoices) {
+            const alertsList = document.getElementById('alertsList');
+            const alertCountBadge = document.getElementById('alertCountBadge');
+            
+            const overstayContainers = containers.filter(c => c.days > 10);
+            alertCountBadge.innerText = overstayContainers.length;
+
+            if (overstayContainers.length === 0) {
+                alertsList.innerHTML = `
+                    <div class="no-alerts">
+                        <i class="bi bi-check-circle-fill"></i>
+                        <span>Aucun conteneur en alerte overstay</span>
+                    </div>
+                `;
+                return;
+            }
+
+            alertsList.innerHTML = '';
+            overstayContainers.forEach(c => {
+                const inv = invoices.find(i => i.container_id === c.id) || { fees: 0 };
+                const alertItem = document.createElement('div');
+                alertItem.className = 'alert-item';
+                alertItem.innerHTML = `
+                    <div class="alert-info">
+                        <div class="alert-icon"><i class="bi bi-exclamation-triangle-fill"></i></div>
+                        <div class="alert-details">
+                            <h5>${c.number} (${c.owner})</h5>
+                            <p>Zone: ${c.zone} | Slot: Bay ${c.bay}, Row ${c.row}</p>
+                        </div>
+                    </div>
+                    <div style="text-align: right">
+                        <span class="alert-badge">${c.days} jours</span>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px; font-weight: 600;">
+                            +${inv.fees.toLocaleString('fr-FR')} MAD
+                        </div>
+                    </div>
+                `;
+                alertsList.appendChild(alertItem);
+            });
+        }
+
+        function renderCharts(containers) {
+            // Group by Armateur
+            const ownerCounts = {};
+            // Group by Zone
+            const zoneCounts = {"A-1": 0, "A-2": 0, "B-1": 0, "B-2": 0};
+
+            containers.forEach(c => {
+                ownerCounts[c.owner] = (ownerCounts[c.owner] || 0) + 1;
+                if (c.zone in zoneCounts) {
+                    zoneCounts[c.zone] += 1;
+                }
+            });
+
+            // Owner Chart (Doughnut)
+            const ownerLabels = Object.keys(ownerCounts);
+            const ownerData = Object.values(ownerCounts);
+
+            const ctxOwner = document.getElementById('ownerChart').getContext('2d');
+            if (ownerChartObj) ownerChartObj.destroy();
+            ownerChartObj = new Chart(ctxOwner, {
+                type: 'doughnut',
+                data: {
+                    labels: ownerLabels,
+                    datasets: [{
+                        data: ownerData,
+                        backgroundColor: ['#0284c7', '#38bdf8', '#10b981', '#f59e0b', '#ef4444', '#06b6d4'],
+                        borderWidth: 2,
+                        borderColor: '#1e293b'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#94a3b8',
+                                font: { family: 'Outfit', size: 12 }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Zone Chart (Bar)
+            const zoneLabels = Object.keys(zoneCounts);
+            const zoneData = Object.values(zoneCounts);
+
+            const ctxZone = document.getElementById('zoneChart').getContext('2d');
+            if (zoneChartObj) zoneChartObj.destroy();
+            zoneChartObj = new Chart(ctxZone, {
+                type: 'bar',
+                data: {
+                    labels: zoneLabels,
+                    datasets: [{
+                        label: 'Conteneurs',
+                        data: zoneData,
+                        backgroundColor: 'rgba(56, 189, 248, 0.4)',
+                        borderColor: '#38bdf8',
+                        borderWidth: 1.5,
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(51, 65, 85, 0.3)' },
+                            ticks: {
+                                color: '#94a3b8',
+                                stepSize: 1,
+                                font: { family: 'Outfit' }
+                            }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: {
+                                color: '#94a3b8',
+                                font: { family: 'Outfit' }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        // Initialize Page
+        loadDashboardData();
+    </script>
+</body>
+</html>

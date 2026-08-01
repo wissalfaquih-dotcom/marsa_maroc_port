@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestion des Conteneurs - Marsa Maroc</title>
+    <!-- Google Fonts & Bootstrap Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    
+    <!-- Shared Stylesheet -->
+    <link rel="stylesheet" href="/static/css/style.css">
+    
+    <style>
+        /* Interactive 2D Grid Styles */
+        .quai-visualizer {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 32px;
+        }
+        
+        .visualizer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .zone-tabs {
+            display: flex;
+            gap: 8px;
+            background-color: rgba(15, 23, 42, 0.4);
+            padding: 4px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+        }
+
+        .zone-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            padding: 8px 16px;
+            font-family: inherit;
+            font-weight: 600;
+            font-size: 0.85rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .zone-btn.active {
+            background-color: var(--primary);
+            color: white;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr); /* 5 Bays */
+            gap: 16px;
+            background-color: rgba(15, 23, 42, 0.2);
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        .bay-column {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .bay-label {
+            text-align: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        /* 2D Container Slot styling */
+        .grid-slot {
+            height: 70px;
+            border-radius: 8px;
+            border: 2px dashed var(--border-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            background-color: rgba(15, 23, 42, 0.2);
+        }
+
+        .grid-slot:hover {
+            border-color: var(--accent);
+            transform: scale(1.02);
+            background-color: rgba(56, 189, 248, 0.05);
+        }
+
+        .grid-slot.occupied {
+            border: 1px solid var(--border-color);
+            background: linear-gradient(135deg, #1e293b, #0f172a);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+        }
+
+        .grid-slot.occupied::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+        }
+
+        .grid-slot.occupied.status-normal::before { background-color: var(--success); }
+        .grid-slot.occupied.status-overstay::before { background-color: var(--danger); }
+        .grid-slot.occupied.status-inspection::before { background-color: var(--warning); }
+        .grid-slot.occupied.status-transit::before { background-color: var(--info); }
+
+        .slot-title {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .slot-desc {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .slot-empty {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .slot-coords {
+            position: absolute;
+            bottom: 4px;
+            right: 6px;
+            font-size: 0.55rem;
+            color: var(--text-muted);
+        }
+
+        .grid-legend {
+            display: flex;
+            gap: 16px;
+            margin-top: 16px;
+            justify-content: flex-end;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+        }
+        
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            padding: 16px 24px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            gap: 12px;
+            z-index: 1100;
+        }
+        .toast.show {
+            display: flex;
+            animation: slideIn 0.3s ease forwards;
+        }
+        .toast-success { border-left: 4px solid var(--success); }
+        .toast-danger { border-left: 4px solid var(--danger); }
+        
+        @keyframes slideIn {
+            from { transform: translateY(100px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar Navigation -->
+    <div class="sidebar">
+        <div class="sidebar-logo">
+            <div class="logo-text">MARSA <span class="logo-accent">MAROC</span></div>
+        </div>
+        <div class="sidebar-profile">
+            <div class="profile-avatar" id="avatarName">WA</div>
+            <div class="profile-info">
+                <span class="profile-name" id="userProfileName">Agent Portuaire</span>
+                <span class="profile-role" id="userProfileRole">Agent</span>
+                <div class="status-indicator">
+                    <span class="status-dot"></span>En ligne
+                </div>
+            </div>
+        </div>
+        <ul class="sidebar-nav">
+            <li class="nav-item"><a href="/dashboard"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
+            <li class="nav-item active"><a href="/conteneurs"><i class="bi bi-box-seam"></i> Conteneurs (Quai)</a></li>
+            <li class="nav-item"><a href="/navires"><i class="bi bi-ship"></i> Escale Navires</a></li>
+            <li class="nav-item"><a href="/facturation"><i class="bi bi-receipt"></i> Facturation</a></li>
+        
+        </ul>
+        <div class="sidebar-footer">
+            <a href="/" class="logout-btn"><i class="bi bi-box-arrow-left"></i> Déconnexion</a>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="app-container">
+        <header class="app-header">
+            <div class="header-title">
+                <h1>Cartographie & Gestion du Quai</h1>
+            </div>
+            <div class="header-actions">
+                <span class="badge-role" id="headerRole">Agent Portuaire</span>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <!-- 2D Quay Visualizer -->
+            <div class="quai-visualizer">
+                <div class="visualizer-header">
+                    <h3 class="table-title">Plan 2D Interactif des Zones</h3>
+                    <div class="zone-tabs">
+                        <button class="zone-btn active" onclick="selectZone('A-1')">Zone A-1</button>
+                        <button class="zone-btn" onclick="selectZone('A-2')">Zone A-2</button>
+                        <button class="zone-btn" onclick="selectZone('B-1')">Zone B-1</button>
+                        <button class="zone-btn" onclick="selectZone('B-2')">Zone B-2</button>
+                    </div>
+                </div>
+
+                <div class="grid-container" id="gridContainer">
+                    <!-- Dynamic rendering of bays and slots -->
+                </div>
+
+                <div class="grid-legend">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: var(--success)"></div>
+                        <span>Dédouané (Normal)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: var(--danger)"></div>
+                        <span>Overstay (>10 jours)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: var(--warning)"></div>
+                        <span>Inspection</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: var(--info)"></div>
+                        <span>En Transit</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="border: 2px dashed var(--border-color)"></div>
+                        <span>Slot Libre (Cliquer pour ajouter)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Containers CRUD List -->
+            <div class="table-container">
+                <div class="table-header-bar">
+                    <h3 class="table-title">Liste Globale de Stockage</h3>
+                    <div class="search-filter-box">
+                        <input type="text" class="search-input" id="tableSearch" placeholder="Rechercher conteneur..." oninput="filterTable()">
+                        <select class="select-filter" id="ownerFilter" onchange="filterTable()">
+                            <option value="">Tous les Armateurs</option>
+                            <option value="Maersk">Maersk</option>
+                            <option value="MSC">MSC</option>
+                            <option value="CMA CGM">CMA CGM</option>
+                            <option value="Hapag-Lloyd">Hapag-Lloyd</option>
+                            <option value="Evergreen">Evergreen</option>
+                            <option value="COSCO">COSCO</option>
+                            <option value="ONE">ONE</option>
+                            <option value="ZIM">ZIM</option>
+                        </select>
+                        <select class="select-filter" id="statusFilter" onchange="filterTable()">
+                            <option value="">Tous les Statuts</option>
+                            <option value="Dédouané">Dédouané</option>
+                            <option value="Overstay">Overstay</option>
+                            <option value="Inspection">Inspection</option>
+                            <option value="En transit">En transit</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="openAddModal()"><i class="bi bi-plus-lg"></i> Ajouter Conteneur</button>
+                    </div>
+                </div>
+
+                <table class="custom-table">
+                    <thead>
+                        <tr>
+                            <th>N° Conteneur</th>
+                            <th>Taille</th>
+                            <th>Armateur</th>
+                            <th>Position (Z-B-R-T)</th>
+                            <th>Date d'Entrée</th>
+                            <th>Durée</th>
+                            <th>Statut</th>
+                            <th style="text-align: right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="containerTableBody">
+                        <!-- Loaded dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <!-- ADD/EDIT CONTAINER MODAL -->
+    <div class="modal-overlay" id="containerModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Nouveau Conteneur</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <form id="containerForm" onsubmit="saveContainer(event)">
+                <input type="hidden" id="containerId">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="containerNum">Numéro de Conteneur (ISO 6346)</label>
+                        <input type="text" id="containerNum" class="form-control" placeholder="ex: MSKU9876543" required pattern="[A-Z]{4}[0-9]{7}">
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="containerSize">Taille (Pieds)</label>
+                            <select id="containerSize" class="form-control" required>
+                                <option value="20">20 ft</option>
+                                <option value="40" selected>40 ft</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="containerOwner">Armateur</label>
+                            <select id="containerOwner" class="form-control" required>
+                                <option value="Maersk">Maersk</option>
+                                <option value="MSC">MSC</option>
+                                <option value="CMA CGM">CMA CGM</option>
+                                <option value="Hapag-Lloyd">Hapag-Lloyd</option>
+                                <option value="Evergreen">Evergreen</option>
+                                <option value="COSCO">COSCO</option>
+                                <option value="ONE">ONE</option>
+                                <option value="ZIM">ZIM</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="containerZone">Zone</label>
+                            <select id="containerZone" class="form-control" required onchange="updateBayOptions()">
+                                <option value="A-1">A-1</option>
+                                <option value="A-2">A-2</option>
+                                <option value="B-1">B-1</option>
+                                <option value="B-2">B-2</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="containerBay">Bay (Colonne)</label>
+                            <select id="containerBay" class="form-control" required>
+                                <option value="01">Bay 01</option>
+                                <option value="02">Bay 02</option>
+                                <option value="03">Bay 03</option>
+                                <option value="04">Bay 04</option>
+                                <option value="05">Bay 05</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="containerRow">Row (Rangée)</label>
+                            <select id="containerRow" class="form-control" required>
+                                <option value="01">Row 01</option>
+                                <option value="02">Row 02</option>
+                                <option value="03">Row 03</option>
+                                <option value="04">Row 04</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="containerTier">Tier (Hauteur)</label>
+                            <select id="containerTier" class="form-control" required>
+                                <option value="1">Tier 1 (Sol)</option>
+                                <option value="2">Tier 2</option>
+                                <option value="3">Tier 3</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="containerStatus">Statut</label>
+                            <select id="containerStatus" class="form-control" required>
+                                <option value="En transit">En transit</option>
+                                <option value="Dédouané">Dédouané</option>
+                                <option value="Inspection">Inspection</option>
+                                <option value="Overstay">Overstay</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="containerDate">Date d'Entrée</label>
+                            <input type="date" id="containerDate" class="form-control" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Annuler</button>
+                    <button type="submit" class="btn btn-primary">Enregistrer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Alerts -->
+    <div class="toast" id="toastAlert">
+        <i class="bi bi-info-circle-fill" id="toastIcon"></i>
+        <span id="toastText">Action effectuée</span>
+    </div>
+
+    <!-- Universal AI Assistant Widget -->
+    <script src="/static/js/ai-widget.js"></script>
+
+    <script>
+        // Init user details
+        const userName = localStorage.getItem('user_name');
+        const userRole = localStorage.getItem('user_role');
+        if (!userName || !userRole) {
+            window.location.href = '/';
+        } else {
+            document.getElementById('userProfileName').innerText = userName;
+            document.getElementById('userProfileRole').innerText = userRole;
+            document.getElementById('headerRole').innerText = userRole;
+            
+            const initials = userName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            document.getElementById('avatarName').innerText = initials;
+        }
+
+        let containersList = [];
+        let selectedZone = 'A-1';
+
+        // Load containers from API
+        async function fetchContainers() {
+            try {
+                const res = await fetch('/api/conteneurs');
+                containersList = await res.json();
+                renderQuayGrid();
+                renderTable(containersList);
+            } catch (err) {
+                console.error("Error fetching containers:", err);
+                showToast("Erreur de chargement des conteneurs", "danger");
+            }
+        }
+
+        // Render 2D Grid
+        function renderQuayGrid() {
+            const gridContainer = document.getElementById('gridContainer');
+            gridContainer.innerHTML = '';
+            
+            // Render 5 Bays (columns)
+            for (let b = 1; b <= 5; b++) {
+                const bayStr = `0${b}`;
+                const bayCol = document.createElement('div');
+                bayCol.className = 'bay-column';
+                
+                const label = document.createElement('div');
+                bayCol.appendChild(label);
+                label.className = 'bay-label';
+                label.innerText = `Bay ${bayStr}`;
+
+                // Render 4 Rows inside each Bay
+                for (let r = 1; r <= 4; r++) {
+                    const rowStr = `0${r}`;
+                    
+                    // Check if this position is occupied by any container in selectedZone
+                    const container = containersList.find(c => 
+                        c.zone === selectedZone && c.bay === bayStr && c.row === rowStr
+                    );
+
+                    const slotDiv = document.createElement('div');
+                    slotDiv.className = 'grid-slot';
+                    
+                    if (container) {
+                        slotDiv.classList.add('occupied');
+                        
+                        // Add class based on container status
+                        let statusClass = 'status-transit';
+                        if (container.status === 'Dédouané') statusClass = 'status-normal';
+                        else if (container.status === 'Overstay') statusClass = 'status-overstay';
+                        else if (container.status === 'Inspection') statusClass = 'status-inspection';
+                        
+                        slotDiv.classList.add(statusClass);
+
+                        slotDiv.innerHTML = `
+                            <span class="slot-title">${container.number}</span>
+                            <span class="slot-desc">${container.owner} (${container.size}ft)</span>
+                            <span class="slot-coords">${selectedZone}-${bayStr}-${rowStr}</span>
+                        `;
+                        // Click occupied slot to edit
+                        slotDiv.onclick = () => openEditModal(container);
+                    } else {
+                        slotDiv.innerHTML = `
+                            <span class="slot-empty"><i class="bi bi-plus-circle text-muted"></i></span>
+                            <span class="slot-coords">${selectedZone}-${bayStr}-${rowStr}</span>
+                        `;
+                        // Click empty slot to add
+                        slotDiv.onclick = () => openAddModalAt(selectedZone, bayStr, rowStr);
+                    }
+
+                    bayCol.appendChild(slotDiv);
+                }
+                gridContainer.appendChild(bayCol);
+            }
+        }
+
+        // Select Zone
+        function selectZone(zone) {
+            selectedZone = zone;
+            const buttons = document.querySelectorAll('.zone-btn');
+            buttons.forEach(btn => {
+                btn.classList.toggle('active', btn.innerText.includes(zone));
+            });
+            renderQuayGrid();
+        }
+
+        // Render Table
+        function renderTable(list) {
+            const tbody = document.getElementById('containerTableBody');
+            tbody.innerHTML = '';
+            
+            if (list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted);">Aucun conteneur trouvé</td></tr>`;
+                return;
+            }
+
+            list.forEach(c => {
+                const tr = document.createElement('tr');
+                
+                let badgeClass = 'badge-info';
+                if (c.status === 'Dédouané') badgeClass = 'badge-success';
+                else if (c.status === 'Overstay') badgeClass = 'badge-danger';
+                else if (c.status === 'Inspection') badgeClass = 'badge-warning';
+
+                tr.innerHTML = `
+                    <td style="font-weight: 700;">${c.number}</td>
+                    <td>${c.size} ft</td>
+                    <td>${c.owner}</td>
+                    <td><span class="badge badge-info" style="font-family: monospace;">${c.zone}-${c.bay}-${c.row}-${c.tier}</span></td>
+                    <td>${c.entry_date}</td>
+                    <td><strong>${c.days} jours</strong></td>
+                    <td><span class="badge ${badgeClass}">${c.status}</span></td>
+                    <td style="text-align: right">
+                        <button class="btn btn-secondary btn-sm" onclick='openEditModal(${JSON.stringify(c)})'><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteContainer('${c.id}')"><i class="bi bi-trash"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Table filters
+        function filterTable() {
+            const query = document.getElementById('tableSearch').value.toLowerCase();
+            const owner = document.getElementById('ownerFilter').value;
+            const status = document.getElementById('statusFilter').value;
+
+            const filtered = containersList.filter(c => {
+                const matchesSearch = c.number.toLowerCase().includes(query) || c.owner.toLowerCase().includes(query);
+                const matchesOwner = owner === "" || c.owner === owner;
+                const matchesStatus = status === "" || c.status === status;
+                return matchesSearch && matchesOwner && matchesStatus;
+            });
+            renderTable(filtered);
+        }
+
+        // Modal Operations
+        function openAddModal() {
+            document.getElementById('modalTitle').innerText = "Nouveau Conteneur";
+            document.getElementById('containerForm').reset();
+            document.getElementById('containerId').value = '';
+            
+            // Set default date to today
+            document.getElementById('containerDate').value = new Date().toISOString().substring(0, 10);
+            
+            document.getElementById('containerModal').classList.add('active');
+        }
+
+        function openAddModalAt(zone, bay, row) {
+            openAddModal();
+            document.getElementById('containerZone').value = zone;
+            document.getElementById('containerBay').value = bay;
+            document.getElementById('containerRow').value = row;
+        }
+
+        function openEditModal(c) {
+            document.getElementById('modalTitle').innerText = `Modifier le Conteneur ${c.number}`;
+            document.getElementById('containerId').value = c.id;
+            document.getElementById('containerNum').value = c.number;
+            document.getElementById('containerSize').value = c.size;
+            document.getElementById('containerOwner').value = c.owner;
+            document.getElementById('containerZone').value = c.zone;
+            document.getElementById('containerBay').value = c.bay;
+            document.getElementById('containerRow').value = c.row;
+            document.getElementById('containerTier').value = c.tier;
+            document.getElementById('containerStatus').value = c.status;
+            document.getElementById('containerDate').value = c.entry_date;
+
+            document.getElementById('containerModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('containerModal').classList.remove('active');
+        }
+
+        // Save Container Add/Edit
+        async function saveContainer(event) {
+            event.preventDefault();
+            
+            const id = document.getElementById('containerId').value;
+            const num = document.getElementById('containerNum').value.toUpperCase();
+            const size = parseInt(document.getElementById('containerSize').value);
+            const owner = document.getElementById('containerOwner').value;
+            const zone = document.getElementById('containerZone').value;
+            const bay = document.getElementById('containerBay').value;
+            const row = document.getElementById('containerRow').value;
+            const tier = document.getElementById('containerTier').value;
+            const status = document.getElementById('containerStatus').value;
+            const date = document.getElementById('containerDate').value;
+
+            const payload = {
+                number: num,
+                size: size,
+                owner: owner,
+                zone: zone,
+                bay: bay,
+                row: row,
+                tier: tier,
+                status: status,
+                entry_date: date,
+                days: 0 // Will be recalculated by API
+            };
+
+            const url = id ? `/api/conteneurs/${id}` : '/api/conteneurs';
+            const method = id ? 'PUT' : 'POST';
+
+            try {
+                const res = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(data.detail || "Une erreur est survenue lors de l'enregistrement");
+                }
+
+                showToast(id ? `Conteneur ${num} mis à jour` : `Conteneur ${num} ajouté avec succès`, "success");
+                closeModal();
+                fetchContainers();
+
+            } catch (err) {
+                console.error(err);
+                showToast(err.message, "danger");
+            }
+        }
+
+        // Delete Container
+        async function deleteContainer(id) {
+            if (!confirm("Êtes-vous sûr de vouloir supprimer ce conteneur de la zone de stockage ?")) return;
+
+            try {
+                const res = await fetch(`/api/conteneurs/${id}`, {
+                    method: 'DELETE'
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok) {
+                    showToast(data.message, "success");
+                    fetchContainers();
+                } else {
+                    throw new Error(data.detail);
+                }
+            } catch (err) {
+                console.error(err);
+                showToast("Erreur lors de la suppression", "danger");
+            }
+        }
+
+        // Toast notifications logic
+        function showToast(message, type) {
+            const toast = document.getElementById('toastAlert');
+            const icon = document.getElementById('toastIcon');
+            const text = document.getElementById('toastText');
+
+            text.innerText = message;
+            toast.className = `toast show toast-${type}`;
+
+            if (type === 'success') {
+                icon.className = 'bi bi-check-circle-fill text-success';
+            } else {
+                icon.className = 'bi bi-exclamation-triangle-fill text-danger';
+            }
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // Initialize page content
+        fetchContainers();
+    </script>
+</body>
+</html>

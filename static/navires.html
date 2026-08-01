@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escale Navires - Marsa Maroc</title>
+    <!-- Google Fonts & Bootstrap Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    
+    <!-- Shared Stylesheet -->
+    <link rel="stylesheet" href="/static/css/style.css">
+    
+    <style>
+        .vessels-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 32px;
+            margin-bottom: 32px;
+        }
+
+        .vessel-card {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: transform var(--transition-speed), border-color var(--transition-speed);
+        }
+
+        .vessel-card:hover {
+            transform: translateY(-6px);
+            border-color: var(--accent);
+        }
+
+        .vessel-image-container {
+            position: relative;
+            height: 200px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .vessel-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.5s ease;
+        }
+
+        .vessel-card:hover .vessel-image {
+            transform: scale(1.05);
+        }
+
+        .vessel-badge-status {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            z-index: 5;
+        }
+
+        .vessel-card-body {
+            padding: 24px;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .vessel-card-header {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .vessel-name {
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: var(--text-primary);
+        }
+
+        .vessel-owner {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .vessel-details-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+            padding: 16px 0;
+        }
+
+        .vessel-detail-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .vessel-detail-label {
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .vessel-detail-value {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        /* Unloading progress bar */
+        .progress-section {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .progress-text {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .progress-bar-container {
+            height: 8px;
+            background-color: var(--bg-main);
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            border-radius: 10px;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            transition: width 1s ease-in-out;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar Navigation -->
+    <div class="sidebar">
+        <div class="sidebar-logo">
+            <div class="logo-text">MARSA <span class="logo-accent">MAROC</span></div>
+        </div>
+        <div class="sidebar-profile">
+            <div class="profile-avatar" id="avatarName">WA</div>
+            <div class="profile-info">
+                <span class="profile-name" id="userProfileName">Agent Portuaire</span>
+                <span class="profile-role" id="userProfileRole">Agent</span>
+                <div class="status-indicator">
+                    <span class="status-dot"></span>En ligne
+                </div>
+            </div>
+        </div>
+        <ul class="sidebar-nav">
+            <li class="nav-item"><a href="/dashboard"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
+            <li class="nav-item"><a href="/conteneurs"><i class="bi bi-box-seam"></i> Conteneurs (Quai)</a></li>
+            <li class="nav-item active"><a href="/navires"><i class="bi bi-ship"></i> Escale Navires</a></li>
+            <li class="nav-item"><a href="/facturation"><i class="bi bi-receipt"></i> Facturation</a></li>
+        
+        </ul>
+        <div class="sidebar-footer">
+            <a href="/" class="logout-btn"><i class="bi bi-box-arrow-left"></i> Déconnexion</a>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="app-container">
+        <header class="app-header">
+            <div class="header-title">
+                <h1>Planning des Escales Navires</h1>
+            </div>
+            <div class="header-actions">
+                <span class="badge-role" id="headerRole">Agent Portuaire</span>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <!-- Vessels Grid -->
+            <div class="vessels-grid" id="vesselsGrid">
+                <!-- Vessels will load here -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Universal AI Assistant Widget -->
+    <script src="/static/js/ai-widget.js"></script>
+
+    <script>
+        // Init profile details
+        const userName = localStorage.getItem('user_name');
+        const userRole = localStorage.getItem('user_role');
+        if (!userName || !userRole) {
+            window.location.href = '/';
+        } else {
+            document.getElementById('userProfileName').innerText = userName;
+            document.getElementById('userProfileRole').innerText = userRole;
+            document.getElementById('headerRole').innerText = userRole;
+            
+            const initials = userName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            document.getElementById('avatarName').innerText = initials;
+        }
+
+        async function fetchVessels() {
+            try {
+                const res = await fetch('/api/navires');
+                const vessels = await res.json();
+                renderVessels(vessels);
+            } catch (err) {
+                console.error("Error loading vessels:", err);
+            }
+        }
+
+        function renderVessels(vessels) {
+            const grid = document.getElementById('vesselsGrid');
+            grid.innerHTML = '';
+
+            vessels.forEach(v => {
+                const card = document.createElement('div');
+                card.className = 'vessel-card';
+
+                let statusBadge = '';
+                if (v.status === 'À quai') {
+                    statusBadge = `<span class="badge badge-success vessel-badge-status"><i class="bi bi-anchor"></i> À quai</span>`;
+                } else if (v.status === 'En attente') {
+                    statusBadge = `<span class="badge badge-warning vessel-badge-status"><i class="bi bi-hourglass-split"></i> En attente</span>`;
+                } else {
+                    statusBadge = `<span class="badge badge-info vessel-badge-status"><i class="bi bi-check-lg"></i> Partit</span>`;
+                }
+
+                // Unloading progress calculations (mock percentage)
+                let pct = 0;
+                if (v.status === 'À quai') {
+                    pct = 65; // Simulating partial unloading/loading
+                } else if (v.status === 'En attente') {
+                    pct = 0;
+                } else {
+                    pct = 100;
+                }
+
+                card.innerHTML = `
+                    <div class="vessel-image-container">
+                        ${statusBadge}
+                        <img src="${v.image}" alt="${v.name}" class="vessel-image">
+                    </div>
+                    <div class="vessel-card-body">
+                        <div class="vessel-card-header">
+                            <span class="vessel-owner">${v.owner}</span>
+                            <h4 class="vessel-name">${v.name}</h4>
+                        </div>
+                        
+                        <div class="vessel-details-grid">
+                            <div class="vessel-detail-item">
+                                <span class="vessel-detail-label">Poste d'Accostage</span>
+                                <span class="vessel-detail-value">${v.berth}</span>
+                            </div>
+                            <div class="vessel-detail-item">
+                                <span class="vessel-detail-label">ETA (Arrivée)</span>
+                                <span class="vessel-detail-value">${v.eta}</span>
+                            </div>
+                            <div class="vessel-detail-item">
+                                <span class="vessel-detail-label">Volume Déchargé</span>
+                                <span class="vessel-detail-value">${v.teu_discharged} TEU</span>
+                            </div>
+                            <div class="vessel-detail-item">
+                                <span class="vessel-detail-label">ETD (Départ)</span>
+                                <span class="vessel-detail-value">${v.etd}</span>
+                            </div>
+                        </div>
+
+                        <div class="progress-section">
+                            <div class="progress-text">
+                                <span>Progression des opérations</span>
+                                <strong>${pct}%</strong>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar-fill" style="width: ${pct}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        // Initialize vessels fetch
+        fetchVessels();
+    </script>
+</body>
+</html>

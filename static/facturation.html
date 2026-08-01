@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Facturation & Overstay - Marsa Maroc</title>
+    <!-- Google Fonts & Bootstrap Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    
+    <!-- Shared Stylesheet -->
+    <link rel="stylesheet" href="/static/css/style.css">
+    
+    <style>
+        .billing-layout {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 32px;
+            margin-bottom: 32px;
+        }
+
+        .calculator-card {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .calc-result {
+            background-color: rgba(15, 23, 42, 0.4);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 10px;
+        }
+
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+            color: var(--text-secondary);
+        }
+
+        .result-row.total {
+            border-top: 1px solid var(--border-color);
+            padding-top: 12px;
+            margin-bottom: 0;
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        /* Invoice PDF design style inside modal */
+        .invoice-paper {
+            background-color: #ffffff;
+            color: #0f172a;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        }
+
+        .invoice-header {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+        }
+
+        .invoice-logo-area h2 {
+            color: #0284c7;
+            font-weight: 800;
+            font-size: 1.6rem;
+            letter-spacing: 0.5px;
+        }
+
+        .invoice-logo-area p {
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-top: 4px;
+        }
+
+        .invoice-meta {
+            text-align: right;
+            font-size: 0.85rem;
+            color: #475569;
+        }
+
+        .invoice-meta h4 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 6px;
+        }
+
+        .invoice-bill-to {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            font-size: 0.85rem;
+            color: #475569;
+            margin-bottom: 30px;
+        }
+
+        .bill-column h5 {
+            font-weight: 700;
+            color: #0f172a;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            margin-bottom: 6px;
+            letter-spacing: 0.5px;
+        }
+
+        .invoice-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+            font-size: 0.85rem;
+        }
+
+        .invoice-table th {
+            background-color: #f1f5f9;
+            color: #334155;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 10px 14px;
+            border-bottom: 2px solid #cbd5e1;
+            text-align: left;
+        }
+
+        .invoice-table td {
+            padding: 12px 14px;
+            border-bottom: 1px solid #e2e8f0;
+            color: #334155;
+        }
+
+        .invoice-totals {
+            margin-left: auto;
+            width: 250px;
+            font-size: 0.85rem;
+        }
+
+        .invoice-total-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            color: #475569;
+        }
+
+        .invoice-total-row.grand-total {
+            border-top: 2px solid #cbd5e1;
+            padding-top: 10px;
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: #0284c7;
+        }
+
+        .invoice-footer {
+            margin-top: 40px;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 20px;
+            text-align: center;
+            font-size: 0.75rem;
+            color: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar Navigation -->
+    <div class="sidebar">
+        <div class="sidebar-logo">
+            <div class="logo-text">MARSA <span class="logo-accent">MAROC</span></div>
+        </div>
+        <div class="sidebar-profile">
+            <div class="profile-avatar" id="avatarName">WA</div>
+            <div class="profile-info">
+                <span class="profile-name" id="userProfileName">Agent Portuaire</span>
+                <span class="profile-role" id="userProfileRole">Agent</span>
+                <div class="status-indicator">
+                    <span class="status-dot"></span>En ligne
+                </div>
+            </div>
+        </div>
+        <ul class="sidebar-nav">
+            <li class="nav-item"><a href="/dashboard"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
+            <li class="nav-item"><a href="/conteneurs"><i class="bi bi-box-seam"></i> Conteneurs (Quai)</a></li>
+            <li class="nav-item"><a href="/navires"><i class="bi bi-ship"></i> Escale Navires</a></li>
+            <li class="nav-item active"><a href="/facturation"><i class="bi bi-receipt"></i> Facturation</a></li>
+        
+        </ul>
+        <div class="sidebar-footer">
+            <a href="/" class="logout-btn"><i class="bi bi-box-arrow-left"></i> Déconnexion</a>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="app-container">
+        <header class="app-header">
+            <div class="header-title">
+                <h1>Gestion Financière & Overstay</h1>
+            </div>
+            <div class="header-actions">
+                <span class="badge-role" id="headerRole">Agent Portuaire</span>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="billing-layout">
+                
+                <!-- Billing List Table -->
+                <div class="table-container">
+                    <div class="table-header-bar">
+                        <h3 class="table-title">Suivi des Factures de Stockage</h3>
+                    </div>
+                    <table class="custom-table">
+                        <thead>
+                            <tr>
+                                <th>Conteneur</th>
+                                <th>Armateur</th>
+                                <th>Date d'Entrée</th>
+                                <th>Jours Stockage</th>
+                                <th>Montant H.T.</th>
+                                <th>Statut Paiement</th>
+                                <th style="text-align: right">Facture PDF</th>
+                            </tr>
+                        </thead>
+                        <tbody id="billingTableBody">
+                            <!-- Invoices loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Overstay Live Calculator Widget -->
+                <div class="calculator-card">
+                    <h3 class="table-title"><i class="bi bi-calculator"></i> Simulateur d'Overstay</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Simulez des frais de stockage en sélectionnant les dates d'entrée et de sortie.</p>
+                    
+                    <div class="form-group">
+                        <label for="calcEntryDate">Date d'Entrée</label>
+                        <input type="date" id="calcEntryDate" class="form-control" onchange="runSimulation()">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="calcExitDate">Date de Sortie</label>
+                        <input type="date" id="calcExitDate" class="form-control" onchange="runSimulation()">
+                    </div>
+
+                    <div class="calc-result" id="calcResultBox">
+                        <div class="result-row">
+                            <span>Jours totaux :</span>
+                            <strong id="resTotalDays">0 jours</strong>
+                        </div>
+                        <div class="result-row">
+                            <span>Franchise (Jours 1-5) :</span>
+                            <span id="resFreeDays">0 MAD</span>
+                        </div>
+                        <div class="result-row">
+                            <span>Tarif standard (Jours 6-10) :</span>
+                            <span id="resStandardFees">0 MAD</span>
+                        </div>
+                        <div class="result-row">
+                            <span>Overstay (Jours > 10) :</span>
+                            <span id="resOverstayFees">0 MAD</span>
+                        </div>
+                        <div class="result-row total">
+                            <span>Total Estimé (H.T.) :</span>
+                            <span id="resTotalFees">0.00 MAD</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- INVOICE PREVIEW MODAL -->
+    <div class="modal-overlay" id="invoiceModal">
+        <div class="modal-content" style="max-width: 750px;">
+            <div class="modal-header">
+                <h3>Aperçu de la Facture</h3>
+                <button class="modal-close" onclick="closeInvoiceModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="background-color: #f8fafc; padding: 24px;">
+                <div class="invoice-paper" id="invoicePaper">
+                    <!-- Dynamic rendering of PDF Invoice details -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeInvoiceModal()">Fermer</button>
+                <button class="btn btn-primary" onclick="simulateDownload()"><i class="bi bi-download"></i> Télécharger PDF</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Universal AI Assistant Widget -->
+    <script src="/static/js/ai-widget.js"></script>
+
+    <script>
+        // Init profile details
+        const userName = localStorage.getItem('user_name');
+        const userRole = localStorage.getItem('user_role');
+        if (!userName || !userRole) {
+            window.location.href = '/';
+        } else {
+            document.getElementById('userProfileName').innerText = userName;
+            document.getElementById('userProfileRole').innerText = userRole;
+            document.getElementById('headerRole').innerText = userRole;
+            
+            const initials = userName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            document.getElementById('avatarName').innerText = initials;
+        }
+
+        // Set default dates for calculator (today & +8 days)
+        const today = new Date();
+        document.getElementById('calcEntryDate').value = today.toISOString().substring(0,10);
+        const exitDate = new Date();
+        exitDate.setDate(today.getDate() + 12); // Overstay demonstration default
+        document.getElementById('calcExitDate').value = exitDate.toISOString().substring(0,10);
+
+        let invoiceList = [];
+
+        async function fetchInvoices() {
+            try {
+                const res = await fetch('/api/factures');
+                invoiceList = await res.json();
+                renderInvoices(invoiceList);
+            } catch (err) {
+                console.error("Error fetching invoices:", err);
+            }
+        }
+
+        function renderInvoices(invoices) {
+            const tbody = document.getElementById('billingTableBody');
+            tbody.innerHTML = '';
+
+            invoices.forEach(inv => {
+                const tr = document.createElement('tr');
+                
+                let paymentBadge = '';
+                if (inv.paid) {
+                    paymentBadge = `<span class="badge badge-success"><i class="bi bi-patch-check"></i> Payé</span>`;
+                } else if (inv.fees > 0) {
+                    paymentBadge = `<span class="badge badge-danger"><i class="bi bi-hourglass-bottom"></i> À payer</span>`;
+                } else {
+                    paymentBadge = `<span class="badge badge-info">Franchise</span>`;
+                }
+
+                tr.innerHTML = `
+                    <td style="font-weight: 700;">${inv.number}</td>
+                    <td>${inv.owner}</td>
+                    <td>${inv.entry_date}</td>
+                    <td><strong>${inv.days} jours</strong></td>
+                    <td style="font-weight: 600; color: ${inv.fees > 0 ? 'var(--warning)' : 'var(--text-primary)'}">
+                        ${inv.fees.toLocaleString('fr-FR')} MAD
+                    </td>
+                    <td>${paymentBadge}</td>
+                    <td style="text-align: right">
+                        <button class="btn btn-secondary btn-sm" onclick="openInvoicePDF('${inv.container_id}')">
+                            <i class="bi bi-file-earmark-pdf"></i> Aperçu
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Overstay progressive calculator logic
+        function runSimulation() {
+            const entryStr = document.getElementById('calcEntryDate').value;
+            const exitStr = document.getElementById('calcExitDate').value;
+            
+            if (!entryStr || !exitStr) return;
+
+            const entryDt = new Date(entryStr);
+            const exitDt = new Date(exitStr);
+
+            const diffTime = exitDt - entryDt;
+            const diffDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+
+            // Calculation
+            let freeDays = 0;
+            let standardDays = 0;
+            let overstayDays = 0;
+
+            let standardFees = 0;
+            let overstayFees = 0;
+
+            if (diffDays <= 5) {
+                freeDays = diffDays;
+            } else if (diffDays <= 10) {
+                freeDays = 5;
+                standardDays = diffDays - 5;
+                standardFees = standardDays * 500;
+            } else {
+                freeDays = 5;
+                standardDays = 5;
+                overstayDays = diffDays - 10;
+                standardFees = 5 * 500;
+                overstayFees = overstayDays * 1500;
+            }
+
+            const totalFees = standardFees + overstayFees;
+
+            // Update UI
+            document.getElementById('resTotalDays').innerText = `${diffDays} jours`;
+            document.getElementById('resFreeDays').innerText = `0 MAD (5j franchise)`;
+            document.getElementById('resStandardFees').innerText = `${standardFees.toLocaleString('fr-FR')} MAD (${standardDays}j × 500)`;
+            document.getElementById('resOverstayFees').innerText = `${overstayFees.toLocaleString('fr-FR')} MAD (${overstayDays}j × 1 500)`;
+            document.getElementById('resTotalFees').innerText = `${totalFees.toLocaleString('fr-FR')} MAD`;
+        }
+
+        // Open invoice simulation PDF modal
+        function openInvoicePDF(containerId) {
+            const invoice = invoiceList.find(i => i.container_id === containerId);
+            if (!invoice) return;
+
+            // Date calculations
+            const todayStr = new Date().toLocaleDateString('fr-FR');
+            const entryDt = new Date(invoice.entry_date);
+            const exitDt = new Date(entryDt);
+            exitDt.setDate(entryDt.getDate() + invoice.days);
+            const exitStr = exitDt.toLocaleDateString('fr-FR');
+
+            // Calculate standard vs overstay days for invoice breakdown
+            let standardDays = 0;
+            let overstayDays = 0;
+            if (invoice.days > 5) {
+                standardDays = Math.min(5, invoice.days - 5);
+            }
+            if (invoice.days > 10) {
+                overstayDays = invoice.days - 10;
+            }
+
+            const standardFees = standardDays * 500;
+            const overstayFees = overstayDays * 1500;
+            
+            const subtotal = invoice.fees;
+            const tva = subtotal * 0.20;
+            const totalTtc = subtotal + tva;
+
+            const paper = document.getElementById('invoicePaper');
+            paper.innerHTML = `
+                <div class="invoice-header">
+                    <div class="invoice-logo-area">
+                        <h2>MARSA MAROC</h2>
+                        <p>Terminal à Conteneurs de Casablanca<br>Port de Casablanca, Maroc</p>
+                    </div>
+                    <div class="invoice-meta">
+                        <h4>FACTURE DE STOCKAGE</h4>
+                        <p><strong>N° Facture:</strong> MM-2026-${1000 + parseInt(containerId)}</p>
+                        <p><strong>Date:</strong> ${todayStr}</p>
+                    </div>
+                </div>
+
+                <div class="invoice-bill-to">
+                    <div class="bill-column">
+                        <h5>Facturé à (Client B2B) :</h5>
+                        <p><strong>${invoice.owner} Logistics Ltd.</strong></p>
+                        <p>Service Facturation Armateurs</p>
+                        <p>Casablanca, Maroc</p>
+                    </div>
+                    <div class="bill-column" style="text-align: right;">
+                        <h5>Détails Conteneur :</h5>
+                        <p><strong>N° Conteneur:</strong> ${invoice.number}</p>
+                        <p><strong>Date d'entrée:</strong> ${new Date(invoice.entry_date).toLocaleDateString('fr-FR')}</p>
+                        <p><strong>Date de facturation:</strong> ${exitStr}</p>
+                    </div>
+                </div>
+
+                <table class="invoice-table">
+                    <thead>
+                        <tr>
+                            <th>Description des prestations</th>
+                            <th style="text-align: center;">Jours</th>
+                            <th style="text-align: right;">Prix Unitaire</th>
+                            <th style="text-align: right;">Total H.T.</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Franchise de stockage (Jours 1 à 5)</td>
+                            <td style="text-align: center;">${Math.min(5, invoice.days)}</td>
+                            <td style="text-align: right;">0.00 MAD</td>
+                            <td style="text-align: right;">0.00 MAD</td>
+                        </tr>
+                        ${standardDays > 0 ? `
+                        <tr>
+                            <td>Frais de stockage standard (Jours 6 à 10)</td>
+                            <td style="text-align: center;">${standardDays}</td>
+                            <td style="text-align: right;">500.00 MAD</td>
+                            <td style="text-align: right;">${standardFees.toFixed(2)} MAD</td>
+                        </tr>
+                        ` : ''}
+                        ${overstayDays > 0 ? `
+                        <tr>
+                            <td>Surtaxe Overstay critique (Jours > 10)</td>
+                            <td style="text-align: center;">${overstayDays}</td>
+                            <td style="text-align: right;">1 500.00 MAD</td>
+                            <td style="text-align: right;">${overstayFees.toFixed(2)} MAD</td>
+                        </tr>
+                        ` : ''}
+                    </tbody>
+                </table>
+
+                <div class="invoice-totals">
+                    <div class="invoice-total-row">
+                        <span>Sous-total H.T. :</span>
+                        <span>${subtotal.toFixed(2)} MAD</span>
+                    </div>
+                    <div class="invoice-total-row">
+                        <span>TVA (20%) :</span>
+                        <span>${tva.toFixed(2)} MAD</span>
+                    </div>
+                    <div class="invoice-total-row grand-total">
+                        <span>Total TTC :</span>
+                        <span>${totalTtc.toFixed(2)} MAD</span>
+                    </div>
+                </div>
+
+                <div class="invoice-footer">
+                    <p>Marsa Maroc - S.A. à Directoire et Conseil de Surveillance au Capital de 732.960.000 DH</p>
+                    <p>Pour toute réclamation, veuillez contacter le service facturation sous 48 heures.</p>
+                </div>
+            `;
+
+            document.getElementById('invoiceModal').classList.add('active');
+        }
+
+        function closeInvoiceModal() {
+            document.getElementById('invoiceModal').classList.remove('active');
+        }
+
+        function simulateDownload() {
+            alert("📥 Téléchargement du PDF de la facture simulé avec succès !");
+            closeInvoiceModal();
+        }
+
+        // Run default simulation & load data
+        runSimulation();
+        fetchInvoices();
+    </script>
+</body>
+</html>
