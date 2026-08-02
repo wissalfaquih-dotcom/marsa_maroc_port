@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.Python
+
+# Environnements virtuels
+venv/
+.venv/
+env/
+
+# Variables d'environnement
+.env
+
+# Éditeurs
+.vscode/
+.idea/
+*.swp
+
+# Système
+.DS_Store
+Thumbs.db
+
+# Sauvegardes
+*.bak
