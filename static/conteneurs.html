@@ -57,18 +57,35 @@
 
         .grid-container {
             display: grid;
-            grid-template-columns: repeat(5, 1fr); /* 5 Bays */
-            gap: 16px;
+            grid-template-columns: repeat(10, 1fr); /* 10 Bays */
+            gap: 10px;
             background-color: rgba(15, 23, 42, 0.2);
             padding: 16px;
             border-radius: 12px;
             border: 1px solid var(--border-color);
+            overflow-x: auto;
         }
 
         .bay-column {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 10px;
+            min-width: 62px;
+        }
+
+        /* Une rangée = une pile de conteneurs (gerbage sur 2 niveaux) */
+        .row-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .row-label {
+            font-size: 0.55rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 1px;
         }
 
         .bay-label {
@@ -83,17 +100,24 @@
 
         /* 2D Container Slot styling */
         .grid-slot {
-            height: 70px;
-            border-radius: 8px;
-            border: 2px dashed var(--border-color);
+            height: 32px;
+            border-radius: 5px;
+            border: 1px dashed var(--border-color);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.15s ease;
             position: relative;
             background-color: rgba(15, 23, 42, 0.2);
+            overflow: hidden;
+        }
+
+        /* Le niveau 2 est légèrement décalé pour rendre le gerbage lisible */
+        .grid-slot.tier-2 {
+            margin-left: 5px;
+            border-style: dotted;
         }
 
         .grid-slot:hover {
@@ -114,9 +138,9 @@
             top: 0;
             left: 0;
             width: 100%;
-            height: 4px;
-            border-top-left-radius: 8px;
-            border-top-right-radius: 8px;
+            height: 3px;
+            border-top-left-radius: 5px;
+            border-top-right-radius: 5px;
         }
 
         .grid-slot.occupied.status-normal::before { background-color: var(--success); }
@@ -125,29 +149,53 @@
         .grid-slot.occupied.status-transit::before { background-color: var(--info); }
 
         .slot-title {
-            font-size: 0.8rem;
+            font-size: 0.6rem;
             font-weight: 700;
             color: var(--text-primary);
-        }
-
-        .slot-desc {
-            font-size: 0.65rem;
-            color: var(--text-secondary);
+            line-height: 1.1;
             margin-top: 2px;
         }
 
-        .slot-empty {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            font-weight: 500;
+        .slot-desc {
+            font-size: 0.5rem;
+            color: var(--text-secondary);
+            line-height: 1.1;
         }
 
-        .slot-coords {
-            position: absolute;
-            bottom: 4px;
-            right: 6px;
-            font-size: 0.55rem;
+        .slot-empty {
+            font-size: 0.6rem;
             color: var(--text-muted);
+            opacity: 0.45;
+        }
+
+        /* Bandeau de synthèse au-dessus du plan */
+        .zone-summary {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .zone-summary b { color: var(--text-primary); }
+
+        .zone-gauge {
+            flex: 1;
+            min-width: 160px;
+            height: 6px;
+            border-radius: 20px;
+            background-color: rgba(148, 163, 184, 0.18);
+            overflow: hidden;
+        }
+
+        .zone-gauge span {
+            display: block;
+            height: 100%;
+            border-radius: 20px;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            transition: width 0.4s ease;
         }
 
         .grid-legend {
@@ -252,6 +300,7 @@
                     </div>
                 </div>
 
+                <div class="zone-summary" id="zoneSummary"></div>
                 <div class="grid-container" id="gridContainer">
                     <!-- Dynamic rendering of bays and slots -->
                 </div>
@@ -370,7 +419,7 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label for="containerZone">Zone</label>
-                            <select id="containerZone" class="form-control" required onchange="updateBayOptions()">
+                            <select id="containerZone" class="form-control" required>
                                 <option value="A-1">A-1</option>
                                 <option value="A-2">A-2</option>
                                 <option value="B-1">B-1</option>
@@ -380,11 +429,7 @@
                         <div class="form-group">
                             <label for="containerBay">Bay (Colonne)</label>
                             <select id="containerBay" class="form-control" required>
-                                <option value="01">Bay 01</option>
-                                <option value="02">Bay 02</option>
-                                <option value="03">Bay 03</option>
-                                <option value="04">Bay 04</option>
-                                <option value="05">Bay 05</option>
+                                <!-- Rempli depuis /api/referentiel -->
                             </select>
                         </div>
                     </div>
@@ -393,18 +438,13 @@
                         <div class="form-group">
                             <label for="containerRow">Row (Rangée)</label>
                             <select id="containerRow" class="form-control" required>
-                                <option value="01">Row 01</option>
-                                <option value="02">Row 02</option>
-                                <option value="03">Row 03</option>
-                                <option value="04">Row 04</option>
+                                <!-- Rempli depuis /api/referentiel -->
                             </select>
                         </div>
                         <div class="form-group">
                             <label for="containerTier">Tier (Hauteur)</label>
                             <select id="containerTier" class="form-control" required>
-                                <option value="1">Tier 1 (Sol)</option>
-                                <option value="2">Tier 2</option>
-                                <option value="3">Tier 3</option>
+                                <!-- Rempli depuis /api/referentiel -->
                             </select>
                         </div>
                     </div>
@@ -460,6 +500,42 @@
         let containersList = [];
         let selectedZone = 'A-1';
 
+        // Structure du quai. Valeurs de repli si l'API n'a pas encore
+        // répondu ; elles sont écrasées par /api/referentiel afin que le
+        // formulaire et la carte restent toujours alignés sur le backend.
+        let YARD = {
+            bays: ['01','02','03','04','05','06','07','08','09','10'],
+            rows: ['01','02','03','04'],
+            tiers: ['1','2']
+        };
+
+        // Charge la structure réelle du quai et remplit les listes déroulantes
+        async function loadYardStructure() {
+            try {
+                const res = await fetch('/api/referentiel');
+                const ref = await res.json();
+                YARD = { bays: ref.bays, rows: ref.rows, tiers: ref.tiers };
+
+                fillSelect('containerBay', YARD.bays, v => `Bay ${v}`);
+                fillSelect('containerRow', YARD.rows, v => `Row ${v}`);
+                fillSelect('containerTier', YARD.tiers,
+                           v => v === '1' ? 'Tier 1 (Sol)' : `Tier ${v}`);
+                fillSelect('containerZone', ref.zones.map(z => z.code), v => v);
+            } catch (err) {
+                console.error("Structure du quai indisponible :", err);
+            }
+        }
+
+        function fillSelect(id, values, labelFn) {
+            const select = document.getElementById(id);
+            if (!select) return;
+            const current = select.value;
+            select.innerHTML = values
+                .map(v => `<option value="${v}">${labelFn(v)}</option>`)
+                .join('');
+            if (values.includes(current)) select.value = current;
+        }
+
         // Load containers from API
         async function fetchContainers() {
             try {
@@ -474,64 +550,99 @@
         }
 
         // Render 2D Grid
+        // Une zone = 10 travées (bays) x 4 rangées (rows) x 2 niveaux de
+        // gerbage (tiers), soit 80 emplacements. Chaque emplacement est
+        // identifié de façon unique par ZONE-BAY-ROW-TIER : deux conteneurs
+        // superposés occupent deux emplacements distincts, pas le même.
         function renderQuayGrid() {
             const gridContainer = document.getElementById('gridContainer');
             gridContainer.innerHTML = '';
-            
-            // Render 5 Bays (columns)
-            for (let b = 1; b <= 5; b++) {
-                const bayStr = `0${b}`;
+
+            const inZone = containersList.filter(c => c.zone === selectedZone);
+
+            // Index des occupants, pour éviter une recherche linéaire par case
+            const occupants = {};
+            inZone.forEach(c => { occupants[`${c.bay}-${c.row}-${c.tier}`] = c; });
+
+            YARD.bays.forEach(bayStr => {
                 const bayCol = document.createElement('div');
                 bayCol.className = 'bay-column';
-                
+
                 const label = document.createElement('div');
-                bayCol.appendChild(label);
                 label.className = 'bay-label';
                 label.innerText = `Bay ${bayStr}`;
+                bayCol.appendChild(label);
 
-                // Render 4 Rows inside each Bay
-                for (let r = 1; r <= 4; r++) {
-                    const rowStr = `0${r}`;
-                    
-                    // Check if this position is occupied by any container in selectedZone
-                    const container = containersList.find(c => 
-                        c.zone === selectedZone && c.bay === bayStr && c.row === rowStr
-                    );
+                YARD.rows.forEach(rowStr => {
+                    const stack = document.createElement('div');
+                    stack.className = 'row-stack';
 
-                    const slotDiv = document.createElement('div');
-                    slotDiv.className = 'grid-slot';
-                    
-                    if (container) {
-                        slotDiv.classList.add('occupied');
-                        
-                        // Add class based on container status
-                        let statusClass = 'status-transit';
-                        if (container.status === 'Dédouané') statusClass = 'status-normal';
-                        else if (container.status === 'Overstay') statusClass = 'status-overstay';
-                        else if (container.status === 'Inspection') statusClass = 'status-inspection';
-                        
-                        slotDiv.classList.add(statusClass);
+                    const rowLabel = document.createElement('div');
+                    rowLabel.className = 'row-label';
+                    rowLabel.innerText = `R${rowStr}`;
+                    stack.appendChild(rowLabel);
 
-                        slotDiv.innerHTML = `
-                            <span class="slot-title">${container.number}</span>
-                            <span class="slot-desc">${container.owner} (${container.size}ft)</span>
-                            <span class="slot-coords">${selectedZone}-${bayStr}-${rowStr}</span>
-                        `;
-                        // Click occupied slot to edit
-                        slotDiv.onclick = () => openEditModal(container);
-                    } else {
-                        slotDiv.innerHTML = `
-                            <span class="slot-empty"><i class="bi bi-plus-circle text-muted"></i></span>
-                            <span class="slot-coords">${selectedZone}-${bayStr}-${rowStr}</span>
-                        `;
-                        // Click empty slot to add
-                        slotDiv.onclick = () => openAddModalAt(selectedZone, bayStr, rowStr);
-                    }
+                    // Le niveau le plus haut est affiché en premier :
+                    // à l'écran comme sur le terre-plein, le tier 2 est
+                    // posé au-dessus du tier 1.
+                    [...YARD.tiers].reverse().forEach(tierStr => {
+                        const container = occupants[`${bayStr}-${rowStr}-${tierStr}`];
+                        const slotCode = `${selectedZone}-${bayStr}-${rowStr}-${tierStr}`;
 
-                    bayCol.appendChild(slotDiv);
-                }
+                        const slotDiv = document.createElement('div');
+                        slotDiv.className = `grid-slot tier-${tierStr}`;
+
+                        if (container) {
+                            let statusClass = 'status-transit';
+                            if (container.status === 'Dédouané') statusClass = 'status-normal';
+                            else if (container.status === 'Overstay') statusClass = 'status-overstay';
+                            else if (container.status === 'Inspection') statusClass = 'status-inspection';
+
+                            slotDiv.classList.add('occupied', statusClass);
+                            slotDiv.title =
+                                `${container.number}\n${container.owner} · ${container.size} pieds\n` +
+                                `Emplacement ${slotCode}\n${container.days} jours · ${container.status}`;
+                            slotDiv.innerHTML = `
+                                <span class="slot-title">${container.number.slice(-4)}</span>
+                                <span class="slot-desc">${container.size}ft · ${container.days}j</span>
+                            `;
+                            slotDiv.onclick = () => openEditModal(container);
+                        } else {
+                            slotDiv.title = `Emplacement ${slotCode} — libre`;
+                            slotDiv.innerHTML = `<span class="slot-empty">T${tierStr}</span>`;
+                            slotDiv.onclick = () => openAddModalAt(selectedZone, bayStr, rowStr, tierStr);
+                        }
+
+                        stack.appendChild(slotDiv);
+                    });
+
+                    bayCol.appendChild(stack);
+                });
+
                 gridContainer.appendChild(bayCol);
-            }
+            });
+
+            renderZoneSummary(inZone.length);
+        }
+
+        // Bandeau de synthèse : occupation réelle de la zone affichée
+        function renderZoneSummary(occupied) {
+            const box = document.getElementById('zoneSummary');
+            if (!box) return;
+
+            const capacity = YARD.bays.length * YARD.rows.length * YARD.tiers.length;
+            const rate = capacity ? Math.round(occupied / capacity * 100) : 0;
+            const overstay = containersList.filter(
+                c => c.zone === selectedZone && c.status === 'Overstay'
+            ).length;
+
+            box.innerHTML = `
+                <span>Zone <b>${selectedZone}</b></span>
+                <span><b>${occupied}</b> / ${capacity} emplacements occupés</span>
+                <div class="zone-gauge"><span style="width:${rate}%"></span></div>
+                <span><b>${rate}%</b></span>
+                <span><i class="bi bi-exclamation-triangle"></i> <b>${overstay}</b> en overstay</span>
+            `;
         }
 
         // Select Zone
@@ -606,11 +717,12 @@
             document.getElementById('containerModal').classList.add('active');
         }
 
-        function openAddModalAt(zone, bay, row) {
+        function openAddModalAt(zone, bay, row, tier) {
             openAddModal();
             document.getElementById('containerZone').value = zone;
             document.getElementById('containerBay').value = bay;
             document.getElementById('containerRow').value = row;
+            if (tier) document.getElementById('containerTier').value = tier;
         }
 
         function openEditModal(c) {
@@ -733,7 +845,8 @@
         }
 
         // Initialize page content
-        fetchContainers();
+        // Démarrage : structure du quai d'abord, puis le stock
+        loadYardStructure().then(fetchContainers);
     </script>
 </body>
 </html>

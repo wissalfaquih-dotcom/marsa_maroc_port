@@ -67,6 +67,32 @@ Chaque emplacement est identifié par `ZONE-TRAVÉE-RANGÉE-NIVEAU` (ex. `A-1-02
 depuis cette structure. Le système refuse toute affectation sur un emplacement
 déjà occupé ou hors grille.
 
+Deux conteneurs superposés n'occupent pas le même emplacement : ils occupent deux
+emplacements distincts, différenciés par leur niveau de gerbage (`tier`). C'est ce
+qui permet à un cariste de savoir quelle boîte aller chercher.
+
+---
+
+## Stock de démonstration
+
+Le stock initial est produit par la fonction `build_initial_stock()` plutôt que
+saisi en dur, afin d'obtenir un terminal réaliste : **120 conteneurs sur 320
+emplacements, soit 37,5 % d'occupation**.
+
+Règles de génération :
+
+- **Graine aléatoire fixe** (`SEED = 2026`) — le jeu de données est identique à
+  chaque démarrage, la démonstration est donc reproductible.
+- **Répartition par armateur pondérée** selon des parts de présence plausibles
+  (Maersk 26 %, MSC 24 %, CMA CGM 20 %, etc.) plutôt qu'uniforme.
+- **Taux de remplissage inégal par zone** (A-1 à 55 %, B-2 à 19 %) pour faire
+  apparaître des zones sous tension et des zones disponibles.
+- **Durées de séjour déséquilibrées vers les séjours courts** (58 % en franchise,
+  24 % en stockage standard, 18 % en overstay), ce qui couvre les trois paliers
+  du barème.
+- Numéros ISO uniques, emplacements uniques, conteneurs 40 pieds majoritaires en
+  zone frigorifique.
+
 ---
 
 ## API

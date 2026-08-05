@@ -12,6 +12,7 @@
 =====================================================================
 """
 
+import random
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -100,37 +101,111 @@ def _entry(days_ago: int) -> str:
 
 
 # ---------------------------------------------------------------------
-# BASE CONTENEURS
+# GENERATION DU STOCK INITIAL
+#
+# Le stock de démonstration est produit par une fonction de seeding
+# plutôt que saisi en dur, afin d'obtenir un terminal réaliste :
+# 120 conteneurs sur 320 emplacements, soit 37,5 % d'occupation.
+#
+# Principes de génération :
+#   - graine aléatoire fixe (SEED) => le jeu de données est IDENTIQUE
+#     à chaque démarrage, donc la démonstration est reproductible ;
+#   - répartition par armateur pondérée selon des parts de marché
+#     plausibles, plutôt qu'uniforme ;
+#   - dates d'entrée tirées sur 25 jours pour couvrir les trois paliers
+#     du barème (franchise, stockage standard, overstay) ;
+#   - occupation inégale des zones, pour faire apparaître des zones
+#     sous tension et des zones disponibles.
+#
 # `base_status` = statut métier saisi par l'agent (En transit, Dédouané…).
 # `status` = statut affiché, calculé à la volée. L'overstay n'écrase donc
 # plus définitivement le statut douanier du conteneur.
 # ---------------------------------------------------------------------
-containers_db: List[Dict[str, Any]] = [
-    {"id": "1", "number": "MSKU9876543", "size": 40, "owner": "Maersk", "zone": "A-1",
-     "bay": "02", "row": "03", "tier": "1", "base_status": "En transit",
-     "entry_date": _entry(3), "paid": True},
-    {"id": "2", "number": "MSKU1234567", "size": 20, "owner": "Maersk", "zone": "A-1",
-     "bay": "02", "row": "03", "tier": "2", "base_status": "En transit",
-     "entry_date": _entry(12), "paid": False},
-    {"id": "3", "number": "MSCI8889991", "size": 40, "owner": "MSC", "zone": "A-2",
-     "bay": "05", "row": "01", "tier": "1", "base_status": "Dédouané",
-     "entry_date": _entry(4), "paid": True},
-    {"id": "4", "number": "MSCI4445552", "size": 20, "owner": "MSC", "zone": "B-1",
-     "bay": "01", "row": "04", "tier": "1", "base_status": "Dédouané",
-     "entry_date": _entry(15), "paid": False},
-    {"id": "5", "number": "CMAC7776662", "size": 40, "owner": "CMA CGM", "zone": "B-2",
-     "bay": "03", "row": "02", "tier": "1", "base_status": "Inspection",
-     "entry_date": _entry(8), "paid": False},
-    {"id": "6", "number": "CMAC1112223", "size": 40, "owner": "CMA CGM", "zone": "A-1",
-     "bay": "04", "row": "01", "tier": "1", "base_status": "Dédouané",
-     "entry_date": _entry(2), "paid": True},
-    {"id": "7", "number": "MSKU5554443", "size": 20, "owner": "Maersk", "zone": "B-1",
-     "bay": "08", "row": "02", "tier": "1", "base_status": "En transit",
-     "entry_date": _entry(1), "paid": True},
-    {"id": "8", "number": "HLAG9990001", "size": 40, "owner": "Hapag-Lloyd", "zone": "A-2",
-     "bay": "01", "row": "02", "tier": "1", "base_status": "Dédouané",
-     "entry_date": _entry(18), "paid": False},
+SEED = 2026
+TARGET_STOCK = 120
+
+# Préfixe ISO propriétaire de chaque armateur + poids de présence.
+CARRIERS: List[Dict[str, Any]] = [
+    {"name": "Maersk", "prefix": "MSKU", "weight": 26},
+    {"name": "MSC", "prefix": "MSCI", "weight": 24},
+    {"name": "CMA CGM", "prefix": "CMAC", "weight": 20},
+    {"name": "Hapag-Lloyd", "prefix": "HLAG", "weight": 12},
+    {"name": "Evergreen", "prefix": "EGHU", "weight": 10},
+    {"name": "COSCO", "prefix": "CSNU", "weight": 5},
+    {"name": "ONE", "prefix": "ONEU", "weight": 3},
 ]
+
+# Taux de remplissage visé par zone : le terminal n'est pas homogène.
+ZONE_FILL = {"A-1": 0.55, "A-2": 0.42, "B-1": 0.34, "B-2": 0.19}
+
+BASE_STATUSES = ["En transit", "Dédouané", "Inspection", "Prêt à livrer"]
+STATUS_WEIGHTS = [35, 40, 12, 13]
+
+
+def build_initial_stock() -> List[Dict[str, Any]]:
+    """Construit le stock de démonstration de façon déterministe."""
+    rng = random.Random(SEED)
+
+    # 1. Tirage des emplacements, zone par zone, selon le taux de remplissage.
+    slots: List[tuple] = []
+    for zone in ZONES:
+        every_slot = [(zone, bay, row, tier)
+                      for bay in BAYS for row in ROWS for tier in TIERS]
+        wanted = round(len(every_slot) * ZONE_FILL[zone])
+        slots.extend(rng.sample(every_slot, wanted))
+
+    # Ajustement au volume cible exact.
+    rng.shuffle(slots)
+    slots = slots[:TARGET_STOCK]
+
+    # 2. Constitution des conteneurs.
+    carrier_pool = [c for c in CARRIERS for _ in range(c["weight"])]
+    used_numbers = set()
+    stock: List[Dict[str, Any]] = []
+
+    for index, (zone, bay, row, tier) in enumerate(slots, start=1):
+        carrier = rng.choice(carrier_pool)
+
+        # Numéro ISO unique : 4 lettres propriétaire + 7 chiffres.
+        while True:
+            number = f"{carrier['prefix']}{rng.randint(1000000, 9999999)}"
+            if number not in used_numbers:
+                used_numbers.add(number)
+                break
+
+        # Durée de séjour : la majorité des boîtes sortent vite, une
+        # minorité s'éternise. D'où une distribution volontairement
+        # déséquilibrée vers les séjours courts.
+        bucket = rng.choices(["court", "moyen", "long"], weights=[58, 24, 18])[0]
+        if bucket == "court":
+            days_ago = rng.randint(0, FREE_DAYS)              # franchise
+        elif bucket == "moyen":
+            days_ago = rng.randint(FREE_DAYS + 1, STANDARD_END)  # facturé
+        else:
+            days_ago = rng.randint(STANDARD_END + 1, 25)         # overstay
+
+        # Les conteneurs frigorifiques sont concentrés en zone B-1.
+        size = 20 if (zone != "B-1" and rng.random() < 0.38) else 40
+
+        stock.append({
+            "id": str(index),
+            "number": number,
+            "size": size,
+            "owner": carrier["name"],
+            "zone": zone,
+            "bay": bay,
+            "row": row,
+            "tier": tier,
+            "base_status": rng.choices(BASE_STATUSES, weights=STATUS_WEIGHTS)[0],
+            "entry_date": _entry(days_ago),
+            # Une facture déjà réglée est l'exception sur les longs séjours.
+            "paid": rng.random() < (0.55 if days_ago <= STANDARD_END else 0.15),
+        })
+
+    return stock
+
+
+containers_db: List[Dict[str, Any]] = build_initial_stock()
 
 # ---------------------------------------------------------------------
 # BASE NAVIRES
