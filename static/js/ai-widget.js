@@ -334,13 +334,20 @@
         // Show typing indicator
         const typingId = appendTypingIndicator();
 
+        const role = localStorage.getItem('user_role');
+        const company = localStorage.getItem('user_company');
+
+        const requestPayload = { message: text };
+        if (role) requestPayload.role = role;
+        if (company) requestPayload.company = company;
+
         // Send to FastAPI Backend API
         fetch('/api/ia/assistant', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ message: text }),
+            body: JSON.stringify(requestPayload),
         })
         .then(response => response.json())
         .then(data => {

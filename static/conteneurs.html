@@ -59,7 +59,7 @@
             display: grid;
             grid-template-columns: repeat(10, 1fr); /* 10 Bays */
             gap: 10px;
-            background-color: rgba(15, 23, 42, 0.2);
+            background-color: rgba(15, 23, 42, 0.4);
             padding: 16px;
             border-radius: 12px;
             border: 1px solid var(--border-color);
@@ -110,7 +110,7 @@
             cursor: pointer;
             transition: all 0.15s ease;
             position: relative;
-            background-color: rgba(15, 23, 42, 0.2);
+            background-color: rgba(15, 23, 42, 0.4);
             overflow: hidden;
         }
 
@@ -147,6 +147,14 @@
         .grid-slot.occupied.status-overstay::before { background-color: var(--danger); }
         .grid-slot.occupied.status-inspection::before { background-color: var(--warning); }
         .grid-slot.occupied.status-transit::before { background-color: var(--info); }
+        .grid-slot.occupied.status-ready::before { background-color: #c084fc; }
+
+        /* Badge « Prêt à livrer » : reprend le violet du plan de quai */
+        .badge-ready {
+            background-color: rgba(192, 132, 252, 0.15);
+            color: #c084fc;
+            border: 1px solid rgba(192, 132, 252, 0.30);
+        }
 
         .slot-title {
             font-size: 0.6rem;
@@ -323,6 +331,10 @@
                         <span>En Transit</span>
                     </div>
                     <div class="legend-item">
+                        <div class="legend-color" style="background-color: #c084fc"></div>
+                        <span>Prêt à livrer</span>
+                    </div>
+                    <div class="legend-item">
                         <div class="legend-color" style="border: 2px dashed var(--border-color)"></div>
                         <span>Slot Libre (Cliquer pour ajouter)</span>
                     </div>
@@ -347,11 +359,15 @@
                             <option value="ZIM">ZIM</option>
                         </select>
                         <select class="select-filter" id="statusFilter" onchange="filterTable()">
+                            <!-- Ce filtre porte sur le statut AFFICHÉ :
+                                 « Overstay » y a donc sa place, contrairement
+                                 au formulaire de saisie. -->
                             <option value="">Tous les Statuts</option>
-                            <option value="Dédouané">Dédouané</option>
-                            <option value="Overstay">Overstay</option>
-                            <option value="Inspection">Inspection</option>
                             <option value="En transit">En transit</option>
+                            <option value="Dédouané">Dédouané</option>
+                            <option value="Inspection">Inspection</option>
+                            <option value="Prêt à livrer">Prêt à livrer</option>
+                            <option value="Overstay">Overstay</option>
                         </select>
                         <button class="btn btn-primary" onclick="openAddModal()"><i class="bi bi-plus-lg"></i> Ajouter Conteneur</button>
                     </div>
@@ -453,10 +469,10 @@
                         <div class="form-group">
                             <label for="containerStatus">Statut</label>
                             <select id="containerStatus" class="form-control" required>
-                                <option value="En transit">En transit</option>
-                                <option value="Dédouané">Dédouané</option>
-                                <option value="Inspection">Inspection</option>
-                                <option value="Overstay">Overstay</option>
+                                <!-- Rempli depuis /api/referentiel.
+                                     « Overstay » n'y figure pas : ce n'est pas un
+                                     statut que l'on saisit, il se déduit de la
+                                     durée de séjour. -->
                             </select>
                         </div>
                         <div class="form-group">
@@ -486,8 +502,14 @@
         // Init user details
         const userName = localStorage.getItem('user_name');
         const userRole = localStorage.getItem('user_role');
+        // Contrôle d'accès : la page est réservée aux agents portuaires.
+        // Sans cette vérification, un client authentifié pourrait atteindre
+        // la page en saisissant son adresse et consulterait les conteneurs
+        // et les factures des autres armateurs.
         if (!userName || !userRole) {
             window.location.href = '/';
+        } else if (userRole !== 'Agent Portuaire') {
+            window.location.replace('/espace_client');
         } else {
             document.getElementById('userProfileName').innerText = userName;
             document.getElementById('userProfileRole').innerText = userRole;
@@ -521,6 +543,7 @@
                 fillSelect('containerTier', YARD.tiers,
                            v => v === '1' ? 'Tier 1 (Sol)' : `Tier ${v}`);
                 fillSelect('containerZone', ref.zones.map(z => z.code), v => v);
+                fillSelect('containerStatus', ref.statuses, v => v);
             } catch (err) {
                 console.error("Structure du quai indisponible :", err);
             }
@@ -597,6 +620,7 @@
                             if (container.status === 'Dédouané') statusClass = 'status-normal';
                             else if (container.status === 'Overstay') statusClass = 'status-overstay';
                             else if (container.status === 'Inspection') statusClass = 'status-inspection';
+                            else if (container.status === 'Prêt à livrer') statusClass = 'status-ready';
 
                             slotDiv.classList.add('occupied', statusClass);
                             slotDiv.title =
@@ -668,10 +692,13 @@
             list.forEach(c => {
                 const tr = document.createElement('tr');
                 
-                let badgeClass = 'badge-info';
+                // Même code couleur que le plan de quai, pour que l'oeil
+                // fasse le lien entre la carte et le tableau.
+                let badgeClass = 'badge-info';                       // En transit
                 if (c.status === 'Dédouané') badgeClass = 'badge-success';
                 else if (c.status === 'Overstay') badgeClass = 'badge-danger';
                 else if (c.status === 'Inspection') badgeClass = 'badge-warning';
+                else if (c.status === 'Prêt à livrer') badgeClass = 'badge-ready';
 
                 tr.innerHTML = `
                     <td style="font-weight: 700;">${c.number}</td>
@@ -735,7 +762,9 @@
             document.getElementById('containerBay').value = c.bay;
             document.getElementById('containerRow').value = c.row;
             document.getElementById('containerTier').value = c.tier;
-            document.getElementById('containerStatus').value = c.status;
+            // c.status peut valoir « Overstay », qui est calculé et non
+            // saisissable : on réédite toujours le statut métier réel.
+            document.getElementById('containerStatus').value = c.base_status || c.status;
             document.getElementById('containerDate').value = c.entry_date;
 
             document.getElementById('containerModal').classList.add('active');

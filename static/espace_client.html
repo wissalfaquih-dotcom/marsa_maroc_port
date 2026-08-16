@@ -13,7 +13,9 @@
     
     <style>
         .client-welcome {
-            background: linear-gradient(135deg, rgba(2, 132, 199, 0.2), rgba(56, 189, 248, 0.05));
+            /* Base opaque sous le dégradé : sans elle, le fond de page
+               clair transparaît sous un texte blanc et le rend illisible. */
+            background: linear-gradient(135deg, rgba(2, 132, 199, 0.28), rgba(56, 189, 248, 0.06)), var(--bg-surface);
             border: 1px solid var(--border-color);
             border-radius: 16px;
             padding: 30px;
@@ -62,28 +64,6 @@
             gap: 8px;
         }
 
-        /* Locked nav items styling */
-        .nav-item.locked a {
-            cursor: not-allowed;
-            opacity: 0.5;
-            position: relative;
-        }
-        
-        .nav-item.locked a:hover {
-            background: none;
-            color: var(--text-secondary);
-            padding-left: 16px;
-        }
-
-        .nav-item.locked a::after {
-            content: '\F4F7'; /* Bootstrap lock icon */
-            font-family: 'bootstrap-icons';
-            position: absolute;
-            right: 16px;
-            font-size: 0.9rem;
-            color: var(--text-muted);
-        }
-        
         /* Toast notification */
         .toast {
             position: fixed;
@@ -128,12 +108,13 @@
                 </div>
             </div>
         </div>
+        <!-- Navigation du portail armateur.
+             Les pages d'exploitation (tableau de bord, quai, escales,
+             facturation du terminal) ne sont pas affichées : un client
+             n'y a pas accès, les lister ne ferait qu'exposer la structure
+             interne de l'application. -->
         <ul class="sidebar-nav">
-            <li class="nav-item locked" onclick="showLockToast()"><a href="#"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
-            <li class="nav-item locked" onclick="showLockToast()"><a href="#"><i class="bi bi-box-seam"></i> Conteneurs (Quai)</a></li>
-            <li class="nav-item locked" onclick="showLockToast()"><a href="#"><i class="bi bi-ship"></i> Escale Navires</a></li>
-            <li class="nav-item locked" onclick="showLockToast()"><a href="#"><i class="bi bi-receipt"></i> Facturation</a></li>
-            <li class="nav-item active"><a href="/espace_client"><i class="bi bi-person-workspace"></i> Espace Client B2B</a></li>
+            <li class="nav-item active"><a href="/espace_client"><i class="bi bi-person-workspace"></i> Mon espace</a></li>
         </ul>
         <div class="sidebar-footer">
             <a href="/" class="logout-btn"><i class="bi bi-box-arrow-left"></i> Déconnexion</a>
@@ -270,8 +251,12 @@
         // Init profile & client matching details
         const userName = localStorage.getItem('user_name');
         const userRole = localStorage.getItem('user_role');
+        // Portail réservé aux comptes armateurs. Un agent portuaire qui
+        // arrive ici est renvoyé vers son tableau de bord.
         if (!userName || !userRole) {
             window.location.href = '/';
+        } else if (userRole === 'Agent Portuaire') {
+            window.location.replace('/dashboard');
         } else {
             document.getElementById('userProfileName').innerText = userName;
             document.getElementById('userProfileRole').innerText = userRole;
@@ -280,13 +265,8 @@
             document.getElementById('avatarName').innerText = initials;
         }
 
-        // Determine Client Brand (Maersk, MSC, etc.)
-        let clientBrand = "Maersk"; // Default fallback
-        if (userName.toLowerCase().includes("msc")) {
-            clientBrand = "MSC";
-        } else if (userName.toLowerCase().includes("cma")) {
-            clientBrand = "CMA CGM";
-        }
+        // Determine Client Brand dynamically from local storage
+        const clientBrand = localStorage.getItem('user_company') || "Maersk";
 
         // Update brand in banner
         document.getElementById('clientBrandBadge').innerText = clientBrand;
@@ -422,15 +402,6 @@
                 `;
                 tbody.appendChild(tr);
             });
-        }
-
-        // Show lock message toast for restricted pages
-        function showLockToast() {
-            const toast = document.getElementById('toastAlert');
-            toast.classList.add('show');
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 3000);
         }
 
         // Initialize dashboard loading

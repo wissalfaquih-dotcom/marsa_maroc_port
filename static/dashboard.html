@@ -212,7 +212,7 @@
                         <div class="stat-icon"><i class="bi bi-grid-3x3-gap"></i></div>
                     </div>
                     <div class="stat-value" id="statOccupancyRate">0%</div>
-                    <div class="stat-desc" id="statAvailableSlots">0 slots disponibles / 80</div>
+                    <div class="stat-desc" id="statAvailableSlots">Chargement…</div>
                 </div>
             </div>
 
@@ -266,8 +266,14 @@
         // Check session
         const userName = localStorage.getItem('user_name');
         const userRole = localStorage.getItem('user_role');
+        // Contrôle d'accès : la page est réservée aux agents portuaires.
+        // Sans cette vérification, un client authentifié pourrait atteindre
+        // la page en saisissant son adresse et consulterait les conteneurs
+        // et les factures des autres armateurs.
         if (!userName || !userRole) {
             window.location.href = '/';
+        } else if (userRole !== 'Agent Portuaire') {
+            window.location.replace('/espace_client');
         } else {
             document.getElementById('userProfileName').innerText = userName;
             document.getElementById('userProfileRole').innerText = userRole;
@@ -292,15 +298,21 @@
                 const invoicesRes = await fetch('/api/factures');
                 const invoices = await invoicesRes.json();
 
+                // Indicateurs calculés par le serveur : la capacité du
+                // terminal ne doit pas être dupliquée ici, sinon elle se
+                // désynchronise dès que la grille du quai évolue.
+                const kpisRes = await fetch('/api/kpis');
+                const kpis = await kpisRes.json();
+
                 // 1. Calculate general metrics
                 const total = containers.length;
                 const overstayCount = containers.filter(c => c.days > 10).length;
                 const overstayRate = total > 0 ? Math.round((overstayCount / total) * 100) : 0;
-                
+
                 const totalPenalties = invoices.reduce((acc, inv) => acc + inv.fees, 0);
-                const capacity = 80;
-                const occupancyRate = Math.round((total / capacity) * 100);
-                const freeSlots = capacity - total;
+                const capacity = kpis.capacity;
+                const occupancyRate = kpis.occupancy_rate;
+                const freeSlots = kpis.free_slots;
 
                 // Update Stat Cards UI
                 document.getElementById('statTotalContainers').innerText = total;

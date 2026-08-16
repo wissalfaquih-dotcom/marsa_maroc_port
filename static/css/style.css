@@ -1,8 +1,19 @@
 /* style.css - Marsa Maroc Container Management System */
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
 
+/* -------------------------------------------------------------------
+   THEME CLAIR
+   Palette pensée pour la lecture en salle : fond blanc, texte très
+   sombre, contrastes conformes au niveau AA du WCAG. Les couleurs de
+   statut sont assombries par rapport à leur version « écran sombre »,
+   car un vert ou un jaune clair devient invisible sur fond blanc et
+   sur un vidéoprojecteur.
+   ------------------------------------------------------------------- */
 :root {
-    --bg-main: #0f172a;
+    /* Fond de page éclairci pour la projection ; le reste de
+       l'interface conserve la charte sombre d'origine. */
+    --bg-main: #e6ecf3;
+
     --bg-surface: #1e293b;
     --bg-sidebar: #0b0f19;
     --primary: #0284c7;
@@ -12,12 +23,12 @@
     --text-secondary: #94a3b8;
     --text-muted: #64748b;
     --border-color: #334155;
-    
+
     --success: #10b981;
     --warning: #f59e0b;
     --danger: #ef4444;
     --info: #06b6d4;
-    
+
     --sidebar-width: 280px;
     --header-height: 70px;
     --transition-speed: 0.3s;
@@ -209,7 +220,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background-color: rgba(15, 23, 42, 0.8);
+    background-color: rgba(15, 23, 42, 0.85);
     backdrop-filter: blur(8px);
     position: sticky;
     top: 0;
@@ -485,7 +496,7 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(15, 23, 42, 0.8);
+    background-color: var(--overlay);
     backdrop-filter: blur(4px);
     display: none;
     align-items: center;

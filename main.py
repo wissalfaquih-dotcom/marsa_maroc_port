@@ -32,6 +32,30 @@ from pydantic import BaseModel, Field
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
+# Copie automatique des nouvelles images réalistes des navires
+import shutil
+try:
+    # Hapag-Lloyd (image fournie par l'utilisateur)
+    src_hapag = Path("C:/Users/PC/.gemini/antigravity/brain/6cc95f66-639f-486a-85fe-1ae66abd808e/media__1786459485598.png")
+    dst_hapag = STATIC_DIR / "images" / "ship_hapag.jpg"
+    if src_hapag.exists():
+        shutil.copy(src_hapag, dst_hapag)
+
+    # Evergreen (image générée)
+    src_evergreen = Path("C:/Users/PC/.gemini/antigravity/brain/6cc95f66-639f-486a-85fe-1ae66abd808e/ship_evergreen_1786459680077.jpg")
+    dst_evergreen = STATIC_DIR / "images" / "ship_evergreen.jpg"
+    if src_evergreen.exists():
+        shutil.copy(src_evergreen, dst_evergreen)
+
+    # ONE (image générée)
+    src_one = Path("C:/Users/PC/.gemini/antigravity/brain/6cc95f66-639f-486a-85fe-1ae66abd808e/ship_one_1786459826388.jpg")
+    dst_one = STATIC_DIR / "images" / "ship_one.jpg"
+    if src_one.exists():
+        shutil.copy(src_one, dst_one)
+    print("[SYSTEM] Copie des nouvelles images réalistes des navires effectuée.")
+except Exception as e:
+    print(f"[SYSTEM] Erreur lors de la copie des images : {e}")
+
 app = FastAPI(
     title="Marsa Maroc - Container Storage Management",
     description="Backend API for managing container stock, vessels, billing, and AI Assistant.",
@@ -67,190 +91,16 @@ FREE_DAYS = 5
 STANDARD_END = 10
 STANDARD_RATE = 500.0
 OVERSTAY_RATE = 1500.0
-
-# ---------------------------------------------------------------------
-# COMPTES
-# `company` permet un filtrage côté serveur : un armateur ne reçoit que
-# ses propres conteneurs, au lieu de recevoir tout le terminal et de
-# filtrer dans le navigateur.
-# ---------------------------------------------------------------------
-USERS: Dict[str, Dict[str, Any]] = {
-    "agent@marsamaroc.ma": {
-        "password": "agent",
-        "role": "Agent Portuaire",
-        "name": "Wissal - Agent Portuaire",
-        "company": None,
-    },
-    "maersk@armateur.com": {
-        "password": "maersk",
-        "role": "Armateur B2B",
-        "name": "Maersk Operations",
-        "company": "Maersk",
-    },
-    "msc@armateur.com": {
-        "password": "msc",
-        "role": "Armateur B2B",
-        "name": "MSC Operations",
-        "company": "MSC",
-    },
-}
+VAT_RATE = 0.20   # TVA marocaine applicable aux prestations portuaires
 
 
-def _entry(days_ago: int) -> str:
-    return (datetime.now() - timedelta(days=days_ago)).strftime("%Y-%m-%d")
 
 
-# ---------------------------------------------------------------------
-# GENERATION DU STOCK INITIAL
-#
-# Le stock de démonstration est produit par une fonction de seeding
-# plutôt que saisi en dur, afin d'obtenir un terminal réaliste :
-# 120 conteneurs sur 320 emplacements, soit 37,5 % d'occupation.
-#
-# Principes de génération :
-#   - graine aléatoire fixe (SEED) => le jeu de données est IDENTIQUE
-#     à chaque démarrage, donc la démonstration est reproductible ;
-#   - répartition par armateur pondérée selon des parts de marché
-#     plausibles, plutôt qu'uniforme ;
-#   - dates d'entrée tirées sur 25 jours pour couvrir les trois paliers
-#     du barème (franchise, stockage standard, overstay) ;
-#   - occupation inégale des zones, pour faire apparaître des zones
-#     sous tension et des zones disponibles.
-#
-# `base_status` = statut métier saisi par l'agent (En transit, Dédouané…).
-# `status` = statut affiché, calculé à la volée. L'overstay n'écrase donc
-# plus définitivement le statut douanier du conteneur.
-# ---------------------------------------------------------------------
-SEED = 2026
-TARGET_STOCK = 120
+import database
 
-# Préfixe ISO propriétaire de chaque armateur + poids de présence.
-CARRIERS: List[Dict[str, Any]] = [
-    {"name": "Maersk", "prefix": "MSKU", "weight": 26},
-    {"name": "MSC", "prefix": "MSCI", "weight": 24},
-    {"name": "CMA CGM", "prefix": "CMAC", "weight": 20},
-    {"name": "Hapag-Lloyd", "prefix": "HLAG", "weight": 12},
-    {"name": "Evergreen", "prefix": "EGHU", "weight": 10},
-    {"name": "COSCO", "prefix": "CSNU", "weight": 5},
-    {"name": "ONE", "prefix": "ONEU", "weight": 3},
-]
+# Initialisation de la base de données SQLite
+database.init_db()
 
-# Taux de remplissage visé par zone : le terminal n'est pas homogène.
-ZONE_FILL = {"A-1": 0.55, "A-2": 0.42, "B-1": 0.34, "B-2": 0.19}
-
-BASE_STATUSES = ["En transit", "Dédouané", "Inspection", "Prêt à livrer"]
-STATUS_WEIGHTS = [35, 40, 12, 13]
-
-
-def build_initial_stock() -> List[Dict[str, Any]]:
-    """Construit le stock de démonstration de façon déterministe."""
-    rng = random.Random(SEED)
-
-    # 1. Tirage des emplacements, zone par zone, selon le taux de remplissage.
-    slots: List[tuple] = []
-    for zone in ZONES:
-        every_slot = [(zone, bay, row, tier)
-                      for bay in BAYS for row in ROWS for tier in TIERS]
-        wanted = round(len(every_slot) * ZONE_FILL[zone])
-        slots.extend(rng.sample(every_slot, wanted))
-
-    # Ajustement au volume cible exact.
-    rng.shuffle(slots)
-    slots = slots[:TARGET_STOCK]
-
-    # 2. Constitution des conteneurs.
-    carrier_pool = [c for c in CARRIERS for _ in range(c["weight"])]
-    used_numbers = set()
-    stock: List[Dict[str, Any]] = []
-
-    for index, (zone, bay, row, tier) in enumerate(slots, start=1):
-        carrier = rng.choice(carrier_pool)
-
-        # Numéro ISO unique : 4 lettres propriétaire + 7 chiffres.
-        while True:
-            number = f"{carrier['prefix']}{rng.randint(1000000, 9999999)}"
-            if number not in used_numbers:
-                used_numbers.add(number)
-                break
-
-        # Durée de séjour : la majorité des boîtes sortent vite, une
-        # minorité s'éternise. D'où une distribution volontairement
-        # déséquilibrée vers les séjours courts.
-        bucket = rng.choices(["court", "moyen", "long"], weights=[58, 24, 18])[0]
-        if bucket == "court":
-            days_ago = rng.randint(0, FREE_DAYS)              # franchise
-        elif bucket == "moyen":
-            days_ago = rng.randint(FREE_DAYS + 1, STANDARD_END)  # facturé
-        else:
-            days_ago = rng.randint(STANDARD_END + 1, 25)         # overstay
-
-        # Les conteneurs frigorifiques sont concentrés en zone B-1.
-        size = 20 if (zone != "B-1" and rng.random() < 0.38) else 40
-
-        stock.append({
-            "id": str(index),
-            "number": number,
-            "size": size,
-            "owner": carrier["name"],
-            "zone": zone,
-            "bay": bay,
-            "row": row,
-            "tier": tier,
-            "base_status": rng.choices(BASE_STATUSES, weights=STATUS_WEIGHTS)[0],
-            "entry_date": _entry(days_ago),
-            # Une facture déjà réglée est l'exception sur les longs séjours.
-            "paid": rng.random() < (0.55 if days_ago <= STANDARD_END else 0.15),
-        })
-
-    return stock
-
-
-containers_db: List[Dict[str, Any]] = build_initial_stock()
-
-# ---------------------------------------------------------------------
-# BASE NAVIRES
-# ---------------------------------------------------------------------
-vessels_db: List[Dict[str, Any]] = [
-    {"id": "v1", "name": "MSC AMELIA", "owner": "MSC", "status": "À quai",
-     "eta": datetime.now().strftime("%Y-%m-%d %H:%M"),
-     "etd": (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d %H:%M"),
-     "berth": "Poste 1", "teu_discharged": 2450, "teu_loaded": 1800,
-     "image": "/static/images/ship_msc.jpg"},
-    {"id": "v2", "name": "CMA CGM ANTOINE DE SAINT EXUPERY", "owner": "CMA CGM",
-     "status": "En attente",
-     "eta": (datetime.now() + timedelta(hours=14)).strftime("%Y-%m-%d %H:%M"),
-     "etd": (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%d %H:%M"),
-     "berth": "Poste 2", "teu_discharged": 1890, "teu_loaded": 1200,
-     "image": "/static/images/ship_cma.jpg"},
-    {"id": "v3", "name": "MAERSK MC-KINNEY MOLLER", "owner": "Maersk",
-     "status": "En attente",
-     "eta": (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d %H:%M"),
-     "etd": (datetime.now() + timedelta(days=5)).strftime("%Y-%m-%d %H:%M"),
-     "berth": "Poste 1", "teu_discharged": 3100, "teu_loaded": 2500,
-     "image": "/static/images/ship_maersk.jpg"},
-    {"id": "v4", "name": "HAPAG-LLOYD BERLIN EXPRESS", "owner": "Hapag-Lloyd",
-     "status": "À quai",
-     "eta": datetime.now().strftime("%Y-%m-%d %H:%M"),
-     "etd": (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%d %H:%M"),
-     "berth": "Poste 3", "teu_discharged": 1950, "teu_loaded": 1400,
-     "image": "/static/images/ship_hapag.jpg"},
-    {"id": "v5", "name": "EVERGREEN EVER GIVEN", "owner": "Evergreen",
-     "status": "En attente",
-     "eta": (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d %H:%M"),
-     "etd": (datetime.now() + timedelta(days=4)).strftime("%Y-%m-%d %H:%M"),
-     "berth": "Poste 2", "teu_discharged": 2200, "teu_loaded": 1600,
-     "image": "/static/images/ship_evergreen.jpg"},
-    {"id": "v6", "name": "COSCO SHIPPING UNIVERSE", "owner": "COSCO", "status": "À quai",
-     "eta": (datetime.now() - timedelta(hours=8)).strftime("%Y-%m-%d %H:%M"),
-     "etd": (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d %H:%M"),
-     "berth": "Poste 4", "teu_discharged": 1780, "teu_loaded": 1100,
-     "image": "/static/images/ship_msc.jpg"},
-    {"id": "v7", "name": "ONE COLUMBA", "owner": "ONE", "status": "En attente",
-     "eta": (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%d %H:%M"),
-     "etd": (datetime.now() + timedelta(days=6)).strftime("%Y-%m-%d %H:%M"),
-     "berth": "Poste 1", "teu_discharged": 2800, "teu_loaded": 2100,
-     "image": "/static/images/ship_cma.jpg"},
-]
 
 
 # ---------------------------------------------------------------------
@@ -303,6 +153,8 @@ def fee_breakdown(days: int) -> Dict[str, Any]:
     free = min(days, FREE_DAYS)
     standard = max(0, min(days, STANDARD_END) - FREE_DAYS)
     over = max(0, days - STANDARD_END)
+    total_ht = calculate_fees(days)
+    vat = round(total_ht * VAT_RATE, 2)
     return {
         "days": days,
         "free_days": free,
@@ -310,7 +162,12 @@ def fee_breakdown(days: int) -> Dict[str, Any]:
         "overstay_days": over,
         "standard_amount": standard * STANDARD_RATE,
         "overstay_amount": over * OVERSTAY_RATE,
-        "total": calculate_fees(days),
+        "total": total_ht,
+        # Montants TTC calculés ici, et nulle part ailleurs, afin que
+        # l'interface et le document imprimable affichent le même chiffre.
+        "vat_rate": VAT_RATE,
+        "vat_amount": vat,
+        "total_ttc": round(total_ht + vat, 2),
         "is_overstay": over > 0,
         "next_day_cost": (OVERSTAY_RATE if days >= STANDARD_END
                           else (STANDARD_RATE if days >= FREE_DAYS else 0.0)),
@@ -345,25 +202,19 @@ def hydrate(c: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def all_containers() -> List[Dict[str, Any]]:
-    return [hydrate(c) for c in containers_db]
+    return [hydrate(c) for c in database.get_all_containers()]
 
 
 def find_container(c_id: str) -> Dict[str, Any]:
-    for item in containers_db:
-        if item["id"] == c_id:
-            return item
-    raise HTTPException(status_code=404, detail="Conteneur introuvable")
+    c = database.get_container(c_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Conteneur introuvable")
+    return c
 
 
 def slot_conflict(zone: str, bay: str, row: str, tier: str,
                   ignore_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    for existing in containers_db:
-        if existing["id"] == ignore_id:
-            continue
-        if (existing["zone"] == zone and existing["bay"] == bay
-                and existing["row"] == row and existing["tier"] == tier):
-            return existing
-    return None
+    return database.check_slot_conflict(zone, bay, row, tier, ignore_id)
 
 
 def validate_slot(zone: str, bay: str, row: str, tier: str) -> None:
@@ -381,8 +232,10 @@ def validate_slot(zone: str, bay: str, row: str, tier: str) -> None:
                             detail=f"Niveau invalide. Valeurs acceptées : {', '.join(TIERS)}")
 
 
-def port_stats() -> Dict[str, Any]:
+def port_stats(company: Optional[str] = None) -> Dict[str, Any]:
     data = all_containers()
+    if company:
+        data = [c for c in data if c["owner"].lower() == company.lower().strip()]
     overstay = [c for c in data if c["is_overstay"]]
     occupied = len(data)
     zones = []
@@ -398,6 +251,9 @@ def port_stats() -> Dict[str, Any]:
             "rate": round(len(in_zone) / SLOTS_PER_ZONE * 100, 1),
             "overstay": len([c for c in in_zone if c["is_overstay"]]),
         })
+    vessels = database.get_all_vessels()
+    if company:
+        vessels = [v for v in vessels if v["owner"].lower() == company.lower().strip()]
     return {
         "total_containers": occupied,
         "capacity": TOTAL_CAPACITY,
@@ -411,8 +267,8 @@ def port_stats() -> Dict[str, Any]:
         "daily_burn": sum(fee_breakdown(c["days"])["next_day_cost"] for c in data),
         "avg_stay": round(sum(c["days"] for c in data) / occupied, 1) if occupied else 0,
         "zones": zones,
-        "vessels_at_berth": len([v for v in vessels_db if v["status"] == "À quai"]),
-        "vessels_expected": len([v for v in vessels_db if v["status"] == "En attente"]),
+        "vessels_at_berth": len([v for v in vessels if v["status"] == "À quai"]),
+        "vessels_expected": len([v for v in vessels if v["status"] == "En attente"]),
     }
 
 
@@ -421,7 +277,7 @@ def port_stats() -> Dict[str, Any]:
 # ---------------------------------------------------------------------
 @app.post("/api/login")
 def login(req: LoginRequest):
-    user = USERS.get(req.email.strip().lower())
+    user = database.get_user_by_email(req.email)
     if not user or user["password"] != req.password:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="Identifiants incorrects")
@@ -470,13 +326,11 @@ def create_container(c: ContainerModel):
         )
 
     number = c.number.strip().upper()
-    if any(x["number"] == number for x in containers_db):
+    if database.check_number_exists(number):
         raise HTTPException(status_code=400,
                             detail=f"Le conteneur {number} est déjà enregistré sur le terminal")
 
-    new_id = str(max((int(x["id"]) for x in containers_db), default=0) + 1)
     new_c = {
-        "id": new_id,
         "number": number,
         "size": c.size,
         "owner": c.owner.strip(),
@@ -488,8 +342,8 @@ def create_container(c: ContainerModel):
         "entry_date": c.entry_date,
         "paid": False,
     }
-    containers_db.append(new_c)
-    return hydrate(new_c)
+    inserted = database.insert_container(new_c)
+    return hydrate(inserted)
 
 
 @app.put("/api/conteneurs/{c_id}")
@@ -505,11 +359,11 @@ def update_container(c_id: str, c: ContainerModel):
         )
 
     number = c.number.strip().upper()
-    if any(x["number"] == number and x["id"] != c_id for x in containers_db):
+    if database.check_number_exists(number, ignore_id=c_id):
         raise HTTPException(status_code=400,
                             detail=f"Le numéro {number} est déjà utilisé par un autre conteneur")
 
-    target.update({
+    updated_data = {
         "number": number,
         "size": c.size,
         "owner": c.owner.strip(),
@@ -518,19 +372,16 @@ def update_container(c_id: str, c: ContainerModel):
         "row": c.row,
         "tier": c.tier,
         "entry_date": c.entry_date,
-    })
-    # Le statut « Overstay » venant de l'affichage n'est jamais réécrit
-    # dans les données : seul un vrai statut métier est conservé.
-    if c.status != "Overstay":
-        target["base_status"] = c.status
-
-    return hydrate(target)
+        "base_status": target["base_status"] if c.status == "Overstay" else c.status,
+    }
+    updated = database.update_container_fields(c_id, updated_data)
+    return hydrate(updated)
 
 
 @app.delete("/api/conteneurs/{c_id}")
 def delete_container(c_id: str):
     target = find_container(c_id)
-    containers_db.remove(target)
+    database.delete_container(c_id)
     return {"status": "success",
             "message": f"Conteneur {target['number']} supprimé avec succès"}
 
@@ -604,7 +455,7 @@ def get_reference():
         "rows": ROWS,
         "tiers": TIERS,
         "statuses": ["En transit", "Dédouané", "Inspection", "Prêt à livrer"],
-        "owners": sorted({c["owner"] for c in containers_db}),
+        "owners": database.get_distinct_owners(),
         "tariff": {
             "free_days": FREE_DAYS,
             "standard_end": STANDARD_END,
@@ -620,8 +471,8 @@ def get_reference():
 @app.get("/api/navires")
 def get_vessels(owner: str = Query("", description="Filtre armateur")):
     if owner:
-        return [v for v in vessels_db if v["owner"].lower() == owner.strip().lower()]
-    return vessels_db
+        return database.get_vessels_by_owner(owner)
+    return database.get_all_vessels()
 
 
 # ---------------------------------------------------------------------
@@ -648,6 +499,8 @@ def get_invoices(owner: str = Query("", description="Filtre armateur")):
             "overstay_days": detail["overstay_days"],
             "standard_amount": detail["standard_amount"],
             "overstay_amount": detail["overstay_amount"],
+            "vat_amount": detail["vat_amount"],
+            "total_ttc": detail["total_ttc"],
             "next_day_cost": detail["next_day_cost"],
             "status": ("Overstay" if detail["is_overstay"]
                        else ("À payer" if detail["total"] > 0 else "Gratuit")),
@@ -660,8 +513,9 @@ def get_invoices(owner: str = Query("", description="Filtre armateur")):
 def set_payment(c_id: str, req: PaymentRequest):
     """Encaissement réel d'une facture (remplace la simulation en dur)."""
     target = find_container(c_id)
-    target["paid"] = req.paid
-    view = hydrate(target)
+    database.update_payment(c_id, req.paid)
+    updated = find_container(c_id)
+    view = hydrate(updated)
     return {
         "status": "success",
         "message": (f"Facture du conteneur {target['number']} marquée "
@@ -795,8 +649,12 @@ def invoice_document(c_id: str):
     <th class="n">P.U. (MAD)</th><th class="n">Montant (MAD)</th></tr></thead>
   <tbody>{rows}</tbody>
   <tfoot>
-    <tr class="ttc"><td colspan="3" class="n">TOTAL À RÉGLER</td>
+    <tr><td colspan="3" class="n">Total H.T.</td>
       <td class="n">{d['total']:,.2f}</td></tr>
+    <tr><td colspan="3" class="n">TVA {int(VAT_RATE * 100)} %</td>
+      <td class="n">{d['vat_amount']:,.2f}</td></tr>
+    <tr class="ttc"><td colspan="3" class="n">TOTAL T.T.C. À RÉGLER</td>
+      <td class="n">{d['total_ttc']:,.2f}</td></tr>
   </tfoot>
 </table>
 {warning}
@@ -837,7 +695,7 @@ def client_space(company: str):
             "avg_stay": round(sum(c["days"] for c in containers) / len(containers), 1),
         },
         "containers": sorted(containers, key=lambda c: -c["days"]),
-        "vessels": [v for v in vessels_db if v["owner"].lower() == key],
+        "vessels": database.get_vessels_by_owner(key),
     }
 
 
@@ -847,7 +705,7 @@ def client_space(company: str):
 @app.post("/api/ia/assistant")
 def ai_assistant(req: AIChatRequest):
     msg = req.message.lower()
-    stats = port_stats()
+    stats = port_stats(req.company)
     data = all_containers()
 
     # Périmètre client : un armateur ne reçoit que ses propres chiffres.
@@ -896,13 +754,14 @@ def ai_assistant(req: AIChatRequest):
         )
 
     elif any(k in msg for k in ("navire", "escale", "bateau", "accostage", "teu")):
-        at_berth = [v for v in vessels_db if v["status"] == "À quai"]
-        waiting = [v for v in vessels_db if v["status"] == "En attente"]
+        vessels = database.get_all_vessels()
+        at_berth = [v for v in vessels if v["status"] == "À quai"]
+        waiting = [v for v in vessels if v["status"] == "En attente"]
         response = (
-            f"**{len(vessels_db)} escales** suivies actuellement :\n"
+            f"**{len(vessels)} escales** suivies actuellement :\n"
             f"- À quai : {', '.join(v['name'] for v in at_berth) if at_berth else 'Aucun'}\n"
             f"- En attente : {', '.join(v['name'] for v in waiting) if waiting else 'Aucun'}\n\n"
-            f"Volume total déchargé : **{sum(v['teu_discharged'] for v in vessels_db):,} TEU**."
+            f"Volume total déchargé : **{sum(v['teu_discharged'] for v in vessels):,} TEU**."
         )
 
     elif any(k in msg for k in ("prévision", "prevision", "combien", "coût", "cout", "projection")):

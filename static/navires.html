@@ -199,8 +199,14 @@
         // Init profile details
         const userName = localStorage.getItem('user_name');
         const userRole = localStorage.getItem('user_role');
+        // Contrôle d'accès : la page est réservée aux agents portuaires.
+        // Sans cette vérification, un client authentifié pourrait atteindre
+        // la page en saisissant son adresse et consulterait les conteneurs
+        // et les factures des autres armateurs.
         if (!userName || !userRole) {
             window.location.href = '/';
+        } else if (userRole !== 'Agent Portuaire') {
+            window.location.replace('/espace_client');
         } else {
             document.getElementById('userProfileName').innerText = userName;
             document.getElementById('userProfileRole').innerText = userRole;
