@@ -32,29 +32,7 @@ from pydantic import BaseModel, Field
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
-# Copie automatique des nouvelles images réalistes des navires
-import shutil
-try:
-    # Hapag-Lloyd (image fournie par l'utilisateur)
-    src_hapag = Path("C:/Users/PC/.gemini/antigravity/brain/6cc95f66-639f-486a-85fe-1ae66abd808e/media__1786459485598.png")
-    dst_hapag = STATIC_DIR / "images" / "ship_hapag.jpg"
-    if src_hapag.exists():
-        shutil.copy(src_hapag, dst_hapag)
 
-    # Evergreen (image générée)
-    src_evergreen = Path("C:/Users/PC/.gemini/antigravity/brain/6cc95f66-639f-486a-85fe-1ae66abd808e/ship_evergreen_1786459680077.jpg")
-    dst_evergreen = STATIC_DIR / "images" / "ship_evergreen.jpg"
-    if src_evergreen.exists():
-        shutil.copy(src_evergreen, dst_evergreen)
-
-    # ONE (image générée)
-    src_one = Path("C:/Users/PC/.gemini/antigravity/brain/6cc95f66-639f-486a-85fe-1ae66abd808e/ship_one_1786459826388.jpg")
-    dst_one = STATIC_DIR / "images" / "ship_one.jpg"
-    if src_one.exists():
-        shutil.copy(src_one, dst_one)
-    print("[SYSTEM] Copie des nouvelles images réalistes des navires effectuée.")
-except Exception as e:
-    print(f"[SYSTEM] Erreur lors de la copie des images : {e}")
 
 app = FastAPI(
     title="Marsa Maroc - Container Storage Management",
