@@ -252,20 +252,29 @@ def _seed_users(conn: sqlite3.Connection) -> None:
 
 
 def init_db() -> None:
-    """Point d'entrée : crée les tables et insère les données si la base est vide."""
+    """Point d'entrée : crée les tables et insère les données si la base est vide.
+
+    L'ordre d'insertion importe : chaque conteneur porte un `vessel_id`
+    contraint par une clé étrangère vers `vessels`. Les navires doivent
+    donc exister avant les conteneurs, sinon SQLite rejette l'insertion
+    avec « FOREIGN KEY constraint failed ».
+    """
     conn = get_connection()
     _create_tables(conn)
 
-    count = conn.execute("SELECT COUNT(*) FROM containers").fetchone()[0]
-    if count == 0:
-        _seed_containers(conn)
-        print(f"[DB] {TARGET_STOCK} conteneurs de démonstration insérés.")
-
+    # 1. Navires — aucune dépendance
     count = conn.execute("SELECT COUNT(*) FROM vessels").fetchone()[0]
     if count == 0:
         _seed_vessels(conn)
         print("[DB] 7 navires de démonstration insérés.")
 
+    # 2. Conteneurs — dépendent des navires ci-dessus
+    count = conn.execute("SELECT COUNT(*) FROM containers").fetchone()[0]
+    if count == 0:
+        _seed_containers(conn)
+        print(f"[DB] {TARGET_STOCK} conteneurs de démonstration insérés.")
+
+    # 3. Utilisateurs — aucune dépendance
     count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
     if count == 0:
         _seed_users(conn)
