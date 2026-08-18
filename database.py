@@ -27,14 +27,38 @@ FREE_DAYS = 5
 STANDARD_END = 10
 
 CARRIERS = [
-    {"name": "Maersk",      "prefix": "MSKU", "weight": 26},
-    {"name": "MSC",         "prefix": "MSCI", "weight": 24},
-    {"name": "CMA CGM",     "prefix": "CMAC", "weight": 20},
+    {"name": "Maersk",      "prefix": "MSKU", "weight": 24},
+    {"name": "MSC",         "prefix": "MSCI", "weight": 22},
+    {"name": "CMA CGM",     "prefix": "CMAC", "weight": 18},
     {"name": "Hapag-Lloyd",  "prefix": "HLAG", "weight": 12},
     {"name": "Evergreen",   "prefix": "EGHU", "weight": 10},
-    {"name": "COSCO",       "prefix": "CSNU", "weight": 5},
-    {"name": "ONE",         "prefix": "ONEU", "weight": 3},
+    {"name": "COSCO",       "prefix": "CSNU", "weight": 8},
+    {"name": "ONE",         "prefix": "ONEU", "weight": 6},
 ]
+
+# ---------------------------------------------------------------------
+# ALLIANCES MARITIMES
+#
+# Un porte-conteneurs ne transporte pas uniquement les boîtes de sa
+# propre compagnie. Deux mécanismes du métier l'expliquent :
+#   - les alliances : les membres exploitent leurs navires en commun ;
+#   - le slot chartering : une compagnie achète des emplacements sur
+#     le navire d'une autre quand elle ne dessert pas la route.
+#
+# Un navire décharge donc à Casablanca des conteneurs de plusieurs
+# armateurs. Le seeding reproduit ce comportement plutôt que d'affecter
+# chaque conteneur au seul navire de sa compagnie.
+# ---------------------------------------------------------------------
+ALLIANCES = {
+    "Gemini":         ["Maersk", "Hapag-Lloyd"],
+    "Ocean Alliance": ["CMA CGM", "COSCO", "Evergreen", "ONE"],
+    "Premier":        ["ONE", "Hapag-Lloyd"],
+}
+
+# Part des conteneurs voyageant sur un navire de leur propre compagnie.
+OWN_VESSEL_SHARE = 0.65
+# Part restante : d'abord les partenaires d'alliance, puis tout navire.
+ALLIANCE_SHARE = 0.25
 
 ZONES_LIST = ["A-1", "A-2", "B-1", "B-2"]
 ZONE_FILL  = {"A-1": 0.55, "A-2": 0.42, "B-1": 0.34, "B-2": 0.19}
@@ -123,6 +147,44 @@ def _entry(days_ago: int) -> str:
     return (datetime.now() - timedelta(days=days_ago)).strftime("%Y-%m-%d")
 
 
+# Navire d'acheminement de chaque armateur (voir VESSELS plus bas)
+VESSEL_BY_OWNER = {
+    "MSC": "v1", "CMA CGM": "v2", "Maersk": "v3", "Hapag-Lloyd": "v4",
+    "Evergreen": "v5", "COSCO": "v6", "ONE": "v7",
+}
+
+
+def _partners(owner: str) -> list:
+    """Compagnies partageant au moins une alliance avec `owner`."""
+    out = set()
+    for membres in ALLIANCES.values():
+        if owner in membres:
+            out.update(m for m in membres if m != owner)
+    return sorted(out)
+
+
+def _pick_vessel(rng: random.Random, owner: str) -> str:
+    """
+    Choisit le navire ayant acheminé un conteneur.
+
+    La majorité des boîtes voyage sur un navire de leur propre compagnie ;
+    le reste part chez un partenaire d'alliance, et une petite fraction
+    sur n'importe quel navire (slot chartering hors alliance).
+    """
+    tirage = rng.random()
+
+    if tirage < OWN_VESSEL_SHARE:
+        return VESSEL_BY_OWNER[owner]
+
+    if tirage < OWN_VESSEL_SHARE + ALLIANCE_SHARE:
+        partenaires = _partners(owner)
+        if partenaires:
+            return VESSEL_BY_OWNER[rng.choice(partenaires)]
+
+    # Slot chartering : n'importe quel navire du terminal
+    return VESSEL_BY_OWNER[rng.choice(list(VESSEL_BY_OWNER))]
+
+
 def _seed_containers(conn: sqlite3.Connection) -> None:
     """Insère 120 conteneurs de démonstration (graine fixe = reproductible)."""
     rng = random.Random(SEED)
@@ -164,21 +226,7 @@ def _seed_containers(conn: sqlite3.Connection) -> None:
         paid = 1 if rng.random() < (0.55 if days_ago <= STANDARD_END else 0.15) else 0
 
         owner_name = carrier["name"]
-        vessel_id = None
-        if owner_name == "Maersk":
-            vessel_id = "v3"
-        elif owner_name == "MSC":
-            vessel_id = "v1" if rng.random() < 0.5 else "v6"
-        elif owner_name == "CMA CGM":
-            vessel_id = "v2"
-        elif owner_name == "Hapag-Lloyd":
-            vessel_id = "v4"
-        elif owner_name == "Evergreen":
-            vessel_id = "v5"
-        elif owner_name == "COSCO":
-            vessel_id = "v6"
-        elif owner_name == "ONE":
-            vessel_id = "v7"
+        vessel_id = _pick_vessel(rng, owner_name)
 
         conn.execute(
             "INSERT INTO containers (number, size, owner, zone, bay, row, tier, "
@@ -413,6 +461,31 @@ def get_vessels_by_owner(owner: str) -> List[Dict[str, Any]]:
     ).fetchall()
     conn.close()
     return [_vessel_to_dict(r) for r in rows]
+
+
+def get_cargo_mix() -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Répartition par armateur des conteneurs encore en stock, navire par navire.
+
+    Un navire décharge des boîtes de plusieurs compagnies (alliances et
+    slot chartering) : cette vue montre le détail réel de son escale.
+
+    Renvoie : { "v1": [{"owner": "MSC", "count": 12}, ...], ... }
+    """
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT vessel_id, owner, COUNT(*) AS n FROM containers "
+        "WHERE vessel_id IS NOT NULL "
+        "GROUP BY vessel_id, owner ORDER BY vessel_id, n DESC"
+    ).fetchall()
+    conn.close()
+
+    mix: Dict[str, List[Dict[str, Any]]] = {}
+    for r in rows:
+        mix.setdefault(r["vessel_id"], []).append(
+            {"owner": r["owner"], "count": r["n"]}
+        )
+    return mix
 
 
 # =====================================================================

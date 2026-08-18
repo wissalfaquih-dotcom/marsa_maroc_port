@@ -15,6 +15,11 @@
     --bg-main: #e6ecf3;
 
     --bg-surface: #1e293b;
+    /* Fond des champs de saisie. Variable distincte de --bg-main :
+       les champs vivent DANS les cartes sombres, ils ne doivent pas
+       suivre la couleur du fond de page, sinon leur texte clair
+       devient illisible. */
+    --bg-input: #0f172a;
     --bg-sidebar: #0b0f19;
     --primary: #0284c7;
     --primary-hover: #0369a1;
@@ -363,7 +368,7 @@ body {
 }
 
 .search-input {
-    background-color: var(--bg-main);
+    background-color: var(--bg-input);
     border: 1px solid var(--border-color);
     color: var(--text-primary);
     padding: 10px 16px;
@@ -380,7 +385,7 @@ body {
 }
 
 .select-filter {
-    background-color: var(--bg-main);
+    background-color: var(--bg-input);
     border: 1px solid var(--border-color);
     color: var(--text-primary);
     padding: 10px 16px;
@@ -389,6 +394,22 @@ body {
     font-family: inherit;
     font-size: 0.9rem;
     cursor: pointer;
+}
+
+/* La liste déroulante ouverte est dessinée par le système : sans ces
+   règles, Windows l'affiche avec ses propres couleurs et le texte
+   peut devenir illisible. */
+.select-filter option,
+.form-control option {
+    background-color: var(--bg-surface);
+    color: var(--text-primary);
+}
+
+/* Texte d'invite des champs, lisible sans concurrencer la saisie */
+.search-input::placeholder,
+.form-control::placeholder {
+    color: var(--text-muted);
+    opacity: 1;
 }
 
 .custom-table {
@@ -576,7 +597,7 @@ body {
 
 .form-control {
     width: 100%;
-    background-color: var(--bg-main);
+    background-color: var(--bg-input);
     border: 1px solid var(--border-color);
     color: var(--text-primary);
     padding: 12px 16px;

@@ -32,8 +32,6 @@ from pydantic import BaseModel, Field
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
-
-
 app = FastAPI(
     title="Marsa Maroc - Container Storage Management",
     description="Backend API for managing container stock, vessels, billing, and AI Assistant.",
@@ -448,9 +446,16 @@ def get_reference():
 # ---------------------------------------------------------------------
 @app.get("/api/navires")
 def get_vessels(owner: str = Query("", description="Filtre armateur")):
-    if owner:
-        return database.get_vessels_by_owner(owner)
-    return database.get_all_vessels()
+    vessels = (database.get_vessels_by_owner(owner) if owner
+               else database.get_all_vessels())
+
+    # Chaque navire transporte des conteneurs de plusieurs compagnies
+    # (alliances, slot chartering) : on joint le détail de son escale.
+    mix = database.get_cargo_mix()
+    for v in vessels:
+        v["cargo_mix"] = mix.get(v["id"], [])
+        v["containers_on_yard"] = sum(m["count"] for m in v["cargo_mix"])
+    return vessels
 
 
 # ---------------------------------------------------------------------

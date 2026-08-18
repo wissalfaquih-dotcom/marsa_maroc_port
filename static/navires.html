@@ -128,9 +128,57 @@
             color: var(--text-secondary);
         }
 
+        /* Répartition du chargement par compagnie */
+        .cargo-section {
+            margin-top: 18px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .cargo-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+        }
+
+        .cargo-title strong {
+            color: var(--accent);
+            font-size: 0.95rem;
+        }
+
+        .cargo-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .cargo-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.74rem;
+            background-color: rgba(56, 189, 248, 0.10);
+            border: 1px solid rgba(56, 189, 248, 0.22);
+            color: var(--text-secondary);
+        }
+
+        .cargo-chip b {
+            color: var(--text-primary);
+            font-size: 0.8rem;
+        }
+
         .progress-bar-container {
             height: 8px;
-            background-color: var(--bg-main);
+            /* Rail de la barre : teinte sombre propre, et non le fond de
+               page, qui est clair depuis le passage en mode projection. */
+            background-color: rgba(15, 23, 42, 0.55);
             border-radius: 10px;
             overflow: hidden;
             position: relative;
@@ -253,6 +301,24 @@
                     pct = 100;
                 }
 
+                // Répartition des conteneurs déchargés, par compagnie.
+                // Un navire transporte les boîtes de plusieurs armateurs :
+                // partenaires d'alliance et achats d'emplacements.
+                const mix = v.cargo_mix || [];
+                const cargoBlock = mix.length ? `
+                    <div class="cargo-section">
+                        <div class="cargo-title">
+                            <span>Conteneurs déchargés sur le quai</span>
+                            <strong>${v.containers_on_yard}</strong>
+                        </div>
+                        <div class="cargo-list">
+                            ${mix.map(m => `
+                                <span class="cargo-chip">
+                                    ${m.owner}<b>${m.count}</b>
+                                </span>`).join('')}
+                        </div>
+                    </div>` : '';
+
                 card.innerHTML = `
                     <div class="vessel-image-container">
                         ${statusBadge}
@@ -282,6 +348,8 @@
                                 <span class="vessel-detail-value">${v.etd}</span>
                             </div>
                         </div>
+
+                        ${cargoBlock}
 
                         <div class="progress-section">
                             <div class="progress-text">

@@ -144,6 +144,8 @@ Règles de génération :
 ```
 marsa_maroc_port/
 ├── main.py              # Backend FastAPI (API + service des pages)
+├── database.py          # Schéma SQLite, accès aux données et seeding
+├── marsa_maroc.db       # Base créée au 1er démarrage (non versionnée)
 ├── requirements.txt
 ├── README.md
 ├── .gitignore
@@ -161,9 +163,62 @@ marsa_maroc_port/
 
 ---
 
-## Note sur la persistance
+## Persistance des données
 
-Les données sont conservées en mémoire et réinitialisées à chaque redémarrage du
-serveur — un choix adapté à la démonstration. Le passage en production suppose une
-base de données (SQLite ou PostgreSQL via SQLAlchemy) et une authentification par
-jeton signé.
+Les données sont stockées dans une **base SQLite** (`marsa_maroc.db`), créée
+automatiquement au premier démarrage par `database.py`. Les modifications
+survivent au redémarrage du serveur : un encaissement, un ajout ou un
+déplacement de conteneur est écrit en base.
+
+**Schéma** — trois tables :
+
+| Table | Contenu | Contraintes |
+|---|---|---|
+| `containers` | Parc conteneurs | `number` unique · `(zone, bay, row, tier)` unique · clé étrangère vers `vessels` |
+| `vessels` | Escales navires | — |
+| `users` | Comptes d'accès | `email` en clé primaire |
+
+Les clés étrangères sont activées (`PRAGMA foreign_keys=ON`), et l'unicité de
+l'emplacement est garantie par la base elle-même : deux conteneurs ne peuvent
+pas occuper le même slot, même en cas de requêtes concurrentes.
+
+**Réinitialiser la base** : supprimer `marsa_maroc.db` et relancer le serveur.
+Le jeu de démonstration est régénéré à l'identique grâce à la graine fixe.
+
+Le fichier n'est pas versionné (`*.db` dans `.gitignore`) : il est recréé à
+la demande et n'a pas sa place dans l'historique Git.
+
+---
+
+## Modélisation des escales
+
+Un porte-conteneurs ne transporte pas uniquement les boîtes de sa propre
+compagnie. Deux mécanismes du métier l'expliquent : les **alliances
+maritimes**, dont les membres exploitent leurs navires en commun, et le
+**slot chartering**, l'achat d'emplacements sur le navire d'un tiers.
+
+Le jeu de démonstration reproduit ce comportement : 65 % des conteneurs
+voyagent sur un navire de leur compagnie, 25 % chez un partenaire d'alliance,
+10 % sur n'importe quel navire. Les alliances modélisées sont Gemini
+(Maersk, Hapag-Lloyd), Ocean Alliance (CMA CGM, COSCO, Evergreen, ONE) et
+Premier (ONE, Hapag-Lloyd). MSC opère seul, sans alliance — ses navires
+transportent donc essentiellement ses propres conteneurs.
+
+La page Escales affiche pour chaque navire la répartition par compagnie des
+conteneurs déchargés.
+
+---
+
+## Limites connues
+
+Ces points sont assumés dans le cadre d'un projet académique et documentés
+plutôt que masqués :
+
+- **L'API n'est pas authentifiée.** Le contrôle d'accès par rôle est appliqué
+  côté navigateur : un client ne peut pas atteindre les pages d'exploitation.
+  Mais un appel direct à `/api/conteneurs` reste possible sans jeton. Une mise
+  en production exigerait un jeton signé (JWT) vérifié à chaque requête.
+- **Les mots de passe sont stockés en clair** dans la table `users`. En
+  production, ils seraient hachés avec bcrypt ou argon2.
+- **Le tableau des conteneurs n'est pas paginé** : les 120 lignes sont rendues
+  d'un coup. Acceptable à cette volumétrie, à revoir au-delà du millier.

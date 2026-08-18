@@ -391,6 +391,26 @@
             const ownerLabels = Object.keys(ownerCounts);
             const ownerData = Object.values(ownerCounts);
 
+            // Une couleur par armateur, choisie explicitement plutôt qu'une
+            // liste positionnelle : avec une liste plus courte que le nombre
+            // d'armateurs, Chart.js reboucle et deux compagnies se retrouvent
+            // avec la même teinte. Les couleurs reprennent la livrée réelle
+            // de chaque compagnie, pour qu'on les reconnaisse au premier coup d'oeil.
+            const OWNER_COLORS = {
+                'Maersk':      '#38bdf8',  // bleu clair
+                'MSC':         '#fde047',  // jaune
+                'CMA CGM':     '#818cf8',  // bleu-violet
+                'Hapag-Lloyd': '#fb923c',  // orange
+                'Evergreen':   '#10b981',  // vert
+                'COSCO':       '#f43f5e',  // rouge
+                'ONE':         '#e879f9'   // magenta
+            };
+            // Palette de repli pour tout armateur ajouté plus tard
+            const FALLBACK_COLORS = ['#a855f7', '#14b8a6', '#facc15', '#64748b'];
+            const ownerColors = ownerLabels.map((name, i) =>
+                OWNER_COLORS[name] || FALLBACK_COLORS[i % FALLBACK_COLORS.length]
+            );
+
             const ctxOwner = document.getElementById('ownerChart').getContext('2d');
             if (ownerChartObj) ownerChartObj.destroy();
             ownerChartObj = new Chart(ctxOwner, {
@@ -399,7 +419,7 @@
                     labels: ownerLabels,
                     datasets: [{
                         data: ownerData,
-                        backgroundColor: ['#0284c7', '#38bdf8', '#10b981', '#f59e0b', '#ef4444', '#06b6d4'],
+                        backgroundColor: ownerColors,
                         borderWidth: 2,
                         borderColor: '#1e293b'
                     }]

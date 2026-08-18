@@ -274,30 +274,35 @@
 
         async function loadClientData() {
             try {
-                // Fetch all data
-                const containersRes = await fetch('/api/conteneurs');
-                const allContainers = await containersRes.json();
+                // Le filtrage est fait par le serveur, pas par le navigateur.
+                // Auparavant la page téléchargeait les 120 conteneurs du
+                // terminal pour n'en afficher qu'une fraction : les données
+                // des armateurs concurrents transitaient jusqu'ici et
+                // restaient lisibles dans les outils du navigateur.
+                const marque = encodeURIComponent(clientBrand);
 
-                const vesselsRes = await fetch('/api/navires');
-                const allVessels = await vesselsRes.json();
+                const [spaceRes, invoicesRes] = await Promise.all([
+                    fetch(`/api/client/${marque}`),
+                    fetch(`/api/factures?owner=${marque}`)
+                ]);
 
-                const invoicesRes = await fetch('/api/factures');
-                const allInvoices = await invoicesRes.json();
+                if (!spaceRes.ok) {
+                    const err = await spaceRes.json();
+                    throw new Error(err.detail || "Espace client indisponible");
+                }
 
-                // 1. Filter data specific to this Client Brand
-                const clientContainers = allContainers.filter(c => c.owner.toLowerCase() === clientBrand.toLowerCase());
-                const clientVessels = allVessels.filter(v => v.owner.toLowerCase() === clientBrand.toLowerCase());
-                const clientInvoices = allInvoices.filter(i => i.owner.toLowerCase() === clientBrand.toLowerCase());
+                const space = await spaceRes.json();
+                const clientInvoices = await invoicesRes.json();
 
-                // 2. Calculations
-                const totalContainers = clientContainers.length;
-                const overstayCount = clientContainers.filter(c => c.days > 10).length;
-                const unpaidFees = clientInvoices.reduce((acc, inv) => acc + (inv.paid ? 0 : inv.fees), 0);
+                const clientContainers = space.containers;
+                const clientVessels = space.vessels;
 
-                // Update cards
-                document.getElementById('statClientContainers').innerText = totalContainers;
-                document.getElementById('statClientOverstay').innerText = overstayCount;
-                document.getElementById('statClientUnpaid').innerText = `${unpaidFees.toLocaleString('fr-FR')} MAD`;
+                // Les totaux sont calculés par le serveur : une seule
+                // implémentation de la règle métier, ici comme ailleurs.
+                document.getElementById('statClientContainers').innerText = space.summary.containers;
+                document.getElementById('statClientOverstay').innerText = space.summary.overstay;
+                document.getElementById('statClientUnpaid').innerText =
+                    `${space.summary.unpaid.toLocaleString('fr-FR')} MAD`;
 
                 // 3. Render Vessels
                 renderVessels(clientVessels);
@@ -309,7 +314,10 @@
                 renderInvoices(clientInvoices);
 
             } catch (err) {
-                console.error("Error loading B2B Client data:", err);
+                console.error("Erreur de chargement de l'espace client :", err);
+                document.getElementById('statClientContainers').innerText = '—';
+                document.getElementById('statClientOverstay').innerText = '—';
+                document.getElementById('statClientUnpaid').innerText = '—';
             }
         }
 
