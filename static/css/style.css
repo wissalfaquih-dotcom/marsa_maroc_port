@@ -236,7 +236,11 @@ body {
     font-size: 1.5rem;
     font-weight: 700;
     background: linear-gradient(to right, var(--text-primary), var(--accent));
+    /* Version préfixée pour Chrome/Safari, puis la propriété standard :
+       sans elle, Firefox n'applique pas le découpage et le texte,
+       rendu transparent par text-fill-color, devient invisible. */
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 

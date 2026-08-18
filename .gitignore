@@ -17,6 +17,9 @@ env/
 # empeche de tester le seeding et alourdit le depot a chaque commit.
 *.db
 
+*.db-shm
+*.db-wal
+
 # Editeurs
 .vscode/
 .idea/
